@@ -11,17 +11,16 @@
   "author": "Kivo",
   "license": "UNLICENSED",
   "devDependencies": {
-    "electron": "^33.2.1",
-    "electron-builder": "^25.1.8"
-  },
-  "dependencies": {
     "@fontsource/inter": "^5.1.0",
     "@fontsource/michroma": "^5.1.0",
     "@fontsource/vt323": "^5.1.0",
-    "electron-log": "^5.2.4",
-    "electron-updater": "^6.3.9",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
     "png-to-ico": "^2.1.8",
     "pngjs": "^7.0.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
   },
   "productName": "Kivo Ultron",
   "build": {
