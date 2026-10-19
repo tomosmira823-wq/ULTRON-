@@ -49,7 +49,29 @@
       labelsEl.appendChild(b);
       s.el = el; s.bubble = b;
     }
+    // scroll to zoom toward the cursor, drag to pan, double-click to reset
+    const toWorld = (e) => { const r = canvas.getBoundingClientRect(); return [((e.clientX - r.left - view.ox) / view.s - W / 2) / cam.z + cam.x, ((e.clientY - r.top - view.oy) / view.s - H / 2) / cam.z + cam.y]; };
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const [wx, wy] = toWorld(e), z0 = camT.z, z1 = Math.max(1, Math.min(4, z0 * (e.deltaY < 0 ? 1.18 : 1 / 1.18)));
+      camT.x = wx - (wx - camT.x) * z0 / z1; camT.y = wy - (wy - camT.y) * z0 / z1; camT.z = z1;
+      if (z1 === 1 && !focused) { camT.x = W / 2; camT.y = H / 2; }
+      clampCam();
+    }, { passive: false });
+    let drag = null;
+    canvas.addEventListener('mousedown', (e) => { drag = { x: e.clientX, y: e.clientY, moved: false }; });
+    window.addEventListener('mousemove', (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+      if (!drag.moved) return;
+      camT.x -= dx / view.s / camT.z; camT.y -= dy / view.s / camT.z; cam.x = camT.x; cam.y = camT.y;
+      drag.x = e.clientX; drag.y = e.clientY; clampCam(); canvas.style.cursor = 'grabbing';
+    });
+    window.addEventListener('mouseup', () => { if (drag) setTimeout(() => (drag = null), 0); canvas.style.cursor = ''; });
+    canvas.addEventListener('dblclick', () => { if (focused) onSelect(null); else Object.assign(camT, { x: W / 2, y: H / 2, z: 1 }); });
     canvas.addEventListener('click', (e) => {
+      if (drag?.moved) return;
       const r = canvas.getBoundingClientRect();
       const x = ((e.clientX - r.left - view.ox) / view.s - W / 2) / cam.z + cam.x, y = ((e.clientY - r.top - view.oy) / view.s - H / 2) / cam.z + cam.y;
       for (const [id, room] of Object.entries(ROOMS)) if (x >= room.x && x <= room.x + room.w && y >= room.y && y <= room.y + room.h) { onSelect(id); return; }
@@ -79,6 +101,7 @@
     b.style.left = bx + 'px'; b.style.top = by + 'px';
     b.classList.toggle('dim', !!focused && focused !== id);
   }
+  function clampCam() { const m = 260; camT.x = Math.max(-m, Math.min(W + m, camT.x)); camT.y = Math.max(-m, Math.min(H + m, camT.y)); }
   // zoom the camera onto a room (null = whole station). panelFrac = share of the view covered by the feed panel on the right
   function focus(id, panelFrac = 0.46) {
     focused = ROOMS[id] ? id : null;
@@ -327,97 +350,135 @@
     }
   }
 
-  // ---------- ULTRON hologram ----------
-  const BODY = (() => {
-    // rings: [y, rx, rz] stacked into a low-poly figure; feet at y = 0, head top at -138
-    const head = [[-138, 3, 3], [-134, 8, 8], [-127, 11, 10], [-119, 11, 10], [-112, 9, 9], [-106, 5, 5]];
-    const torso = [[-102, 5, 4], [-96, 22, 10], [-86, 21, 10], [-74, 17, 9], [-64, 14, 8], [-56, 17, 9], [-50, 15, 9]];
-    return { head, torso };
-  })();
+  // ---------- ULTRON hologram: an original armoured war-machine ----------
+  // rings: [y, rx, rz, ox, oz]; feet at y = 0, crest top near -166
+  const BODY = {
+    head:  [[-156, 3, 3, 0, 1], [-152, 9, 8, 0, 2], [-145, 12, 11, 0, 3], [-137, 13, 13, 0, 5], [-129, 11, 12, 0, 6], [-123, 7, 8, 0, 4]],
+    torso: [[-118, 6, 5, 0, 1], [-110, 30, 13, 0, 2], [-98, 32, 15, 0, 3], [-84, 24, 13, 0, 3], [-72, 16, 10, 0, 2], [-63, 13, 9, 0, 1], [-56, 18, 10, 0, 0], [-50, 16, 9, 0, 0]],
+    padL:  [[-120, 5, 5, -33, 0], [-114, 13, 11, -35, 0], [-106, 15, 12, -36, 0], [-98, 11, 10, -35, 0]],
+    padR:  [[-120, 5, 5, 33, 0], [-114, 13, 11, 35, 0], [-106, 15, 12, 36, 0], [-98, 11, 10, 35, 0]],
+  };
   function ultronSegments(busy) {
-    const segs = [], N = 8;
-    const ringPts = (yc, rx, rz, ox = 0) => Array.from({ length: N }, (_, i) => { const a = i / N * Math.PI * 2; return [ox + Math.cos(a) * rx, yc, Math.sin(a) * rz]; });
-    const stack = (rings) => {
-      const pts = rings.map(([yy, rx, rz]) => ringPts(yy, rx, rz));
+    const segs = [], N = 6;
+    const ring = (yc, rx, rz, ox, oz, rot = 0) => Array.from({ length: N }, (_, i) => { const a = i / N * Math.PI * 2 + rot; return [ox + Math.cos(a) * rx, yc, oz + Math.sin(a) * rz]; });
+    const stack = (rings, part) => {
+      const pts = rings.map(([y, rx, rz, ox, oz], i) => ring(y, rx, rz, ox, oz, i % 2 ? Math.PI / N : 0));
       for (let i = 0; i < pts.length; i++) for (let j = 0; j < N; j++) {
-        segs.push([pts[i][j], pts[i][(j + 1) % N], i]);
-        if (i < pts.length - 1) segs.push([pts[i][j], pts[i + 1][j], i]);
+        segs.push([pts[i][j], pts[i][(j + 1) % N], part]);
+        if (i < pts.length - 1) { segs.push([pts[i][j], pts[i + 1][j], part]); segs.push([pts[i][j], pts[i + 1][(j + 1) % N], part]); }
       }
     };
-    stack(BODY.head); stack(BODY.torso);
-    // limbs as thin tubes
-    const tube = (a, b, r) => {
+    const line = (a, b, part = 'b') => segs.push([a, b, part]);
+    const tube = (a, b, r, part = 'b') => {
       const n = 5, ra = [], rb = [];
-      for (let i = 0; i < n; i++) { const ang = i / n * Math.PI * 2; ra.push([a[0] + Math.cos(ang) * r, a[1], a[2] + Math.sin(ang) * r]); rb.push([b[0] + Math.cos(ang) * r, b[1], b[2] + Math.sin(ang) * r]); }
-      for (let i = 0; i < n; i++) { segs.push([ra[i], rb[i], 9]); segs.push([rb[i], rb[(i + 1) % n], 9]); }
+      for (let i = 0; i < n; i++) { const g = i / n * Math.PI * 2; ra.push([a[0] + Math.cos(g) * r, a[1], a[2] + Math.sin(g) * r]); rb.push([b[0] + Math.cos(g) * r * 0.85, b[1], b[2] + Math.sin(g) * r * 0.85]); }
+      for (let i = 0; i < n; i++) { segs.push([ra[i], rb[i], part]); segs.push([rb[i], rb[(i + 1) % n], part]); }
     };
-    const sway = Math.sin(t * 1.2) * 2;
-    // arms: right arm raises when talking / pointing
+    stack(BODY.head, 'h'); stack(BODY.torso, 'b'); stack(BODY.padL, 'b'); stack(BODY.padR, 'b');
+    // head crest + jaw spikes
+    line([0, -156, 1], [0, -167, -8], 'h'); line([0, -167, -8], [0, -158, -16], 'h'); line([0, -158, -16], [0, -146, -12], 'h');
+    line([-11, -127, 9], [-14, -119, 12], 'h'); line([11, -127, 9], [14, -119, 12], 'h');
+    // shoulder spikes
+    for (const sx of [-1, 1]) {
+      line([sx * 30, -118, 2], [sx * 38, -136, -2]); line([sx * 38, -136, -2], [sx * 42, -116, 0]);
+      line([sx * 40, -114, -6], [sx * 50, -128, -10]); line([sx * 50, -128, -10], [sx * 48, -108, -4]);
+    }
+    // chest plating + spine
+    line([-18, -104, 17], [0, -88, 19]); line([18, -104, 17], [0, -88, 19]); line([0, -88, 19], [0, -66, 12]);
+    // arms: long, heavy, clawed
     const point = ultron.pointT > 0 ? (ROOMS[ultron.point]?.x + (ROOMS[ultron.point]?.w || 0) / 2 > 480 ? 1 : -1) : 0;
-    const talk = busy ? Math.sin(t * 5) : 0;
-    const R = point === 1 ? [[22, -94, 0], [40, -104, 6], [58, -116, 10]] : [[22, -94, 0], [27, -74, 2 + talk * 3], [28 + talk * 6, -54 - Math.max(0, talk) * 18, 6 + talk * 4]];
-    const Lm = point === -1 ? [[-22, -94, 0], [-40, -104, 6], [-58, -116, 10]] : [[-22, -94, 0], [-27, -74, 2], [-26, -54 + sway, 4]];
-    tube(R[0], R[1], 3.5); tube(R[1], R[2], 3);
-    tube(Lm[0], Lm[1], 3.5); tube(Lm[1], Lm[2], 3);
-    // legs
-    tube([9, -50, 0], [10, -26, 2], 4.5); tube([10, -26, 2], [10, -2, 0], 3.5);
-    tube([-9, -50, 0], [-10, -26, 2], 4.5); tube([-10, -26, 2], [-10, -2, 0], 3.5);
-    return { segs, hand: point ? (point === 1 ? R[2] : Lm[2]) : null };
+    const talk = busy ? Math.sin(t * 4) : 0, sway = Math.sin(t * 1.1) * 2;
+    const arm = (sx) => point === sx
+      ? [[sx * 36, -104, 0], [sx * 56, -116, 10], [sx * 78, -126, 20]]
+      : [[sx * 36, -104, 0], [sx * 44, -78, 6 + (sx > 0 ? talk * 4 : 0)], [sx * (44 + (sx > 0 ? Math.max(0, talk) * 8 : 0)), -52 - (sx > 0 ? Math.max(0, talk) * 14 : 0) + (sx < 0 ? sway : 0), 12]];
+    const hands = {};
+    for (const sx of [-1, 1]) {
+      const A = arm(sx); tube(A[0], A[1], 5.5); tube(A[1], A[2], 4.5);
+      ring(A[1][1], 6, 6, A[1][0], A[1][2]).forEach((q, i, arr) => line(q, arr[(i + 1) % arr.length])); // elbow guard
+      const h = A[2], open = point === sx ? 1 : busy ? 0.6 : 0.3;
+      for (const f of [-1, 0, 1]) { const k = [h[0] + f * 3 * sx, h[1] + 7, h[2] + 4 + f * 2]; line(h, k); line(k, [k[0] + f * 3 * open * sx, k[1] + 6, k[2] + 5 * open]); }
+      hands[sx] = h;
+    }
+    // legs: thick, armoured knees, clawed feet
+    for (const sx of [-1, 1]) {
+      tube([sx * 11, -52, 0], [sx * 14, -27, 5], 6.5); tube([sx * 14, -27, 5], [sx * 13, -4, -1], 5);
+      ring(-27, 7, 7, sx * 14, 7).forEach((q, i, arr) => line(q, arr[(i + 1) % arr.length]));
+      for (const f of [-1, 1]) line([sx * 13, -2, 0], [sx * 13 + f * 5, 0, 10]);
+      line([sx * 13, -2, 0], [sx * 13, 0, -7]);
+    }
+    return { segs, hand: point ? hands[point] : null };
   }
   function drawUltron(dt) {
     const r = ROOMS.ultron, s = state.ultron, busy = s.busy;
     if (ultron.pointT > 0) ultron.pointT -= dt;
-    const cx = r.x + r.w / 2, fy = r.y + r.h - 22, scale = 0.98;
+    const cx = r.x + r.w / 2, fy = r.y + r.h - 20, scale = 0.92;
+    const RED = s.err ? '#ff2a2a' : '#ff3b3b';
     // holo pad
     for (let i = 3; i >= 0; i--) {
       ctx.globalAlpha = 0.18 + i * 0.06; ctx.strokeStyle = C.g; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.ellipse(cx, fy + 4, 30 + i * 9, 7 + i * 2.2, 0, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(cx, fy + 4, 32 + i * 10, 7 + i * 2.4, 0, 0, 7); ctx.stroke();
     }
-    ctx.globalAlpha = 0.9; ctx.setLineDash([5, 6]); ctx.lineDashOffset = -t * (busy ? 40 : 12);
-    ctx.beginPath(); ctx.ellipse(cx, fy + 4, 52, 12, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalAlpha = 0.9; ctx.strokeStyle = busy ? RED : C.g; ctx.setLineDash([5, 6]); ctx.lineDashOffset = -t * (busy ? 40 : 12);
+    ctx.beginPath(); ctx.ellipse(cx, fy + 4, 58, 13, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]);
     // light cone
-    const g = ctx.createLinearGradient(0, fy, 0, fy - 150);
-    g.addColorStop(0, `rgba(70,255,154,${busy ? 0.22 : 0.13})`); g.addColorStop(1, 'rgba(70,255,154,0)');
+    const g = ctx.createLinearGradient(0, fy, 0, fy - 165);
+    g.addColorStop(0, busy ? 'rgba(255,59,59,0.16)' : 'rgba(70,255,154,0.13)'); g.addColorStop(1, 'rgba(70,255,154,0)');
     ctx.globalAlpha = 1; ctx.fillStyle = g;
-    ctx.beginPath(); ctx.moveTo(cx - 48, fy + 4); ctx.lineTo(cx + 48, fy + 4); ctx.lineTo(cx + 34, fy - 150); ctx.lineTo(cx - 34, fy - 150); ctx.closePath(); ctx.fill();
-    // console ring around the pad
-    for (let i = 0; i < 6; i++) { const a = Math.PI + i / 5 * Math.PI; const kx = cx + Math.cos(a) * 92, ky = fy - 50 + Math.sin(a) * 52 + 50; px(kx - 7, ky - 4, 14, 8, '#2a3134'); px(kx - 5, ky - 3, 10, 2, busy && Math.sin(t * 9 + i) > 0 ? C.warn : C.g); }
-    // figure
-    const rot = Math.sin(t * 0.45) * 0.75 + (ultron.pointT > 0 ? 0 : 0);
-    const cr = Math.cos(rot), sr = Math.sin(rot);
-    const proj = ([x, y, z]) => { const X = x * cr - z * sr, Z = x * sr + z * cr; return [cx + X * scale, fy + (y + Math.sin(t * 1.6) * 1.5) * scale, Z]; };
+    ctx.beginPath(); ctx.moveTo(cx - 56, fy + 4); ctx.lineTo(cx + 56, fy + 4); ctx.lineTo(cx + 40, fy - 165); ctx.lineTo(cx - 40, fy - 165); ctx.closePath(); ctx.fill();
+    // console ring
+    for (let i = 0; i < 6; i++) { const a = Math.PI + i / 5 * Math.PI; const kx = cx + Math.cos(a) * 96, ky = fy + Math.sin(a) * 52; px(kx - 7, ky - 4, 14, 8, '#2a3134'); px(kx - 5, ky - 3, 10, 2, busy && Math.sin(t * 9 + i) > 0 ? RED : C.g); }
+    // pose: slow menacing turn; head tracks the room it is ordering
+    const bodyRot = Math.sin(t * 0.35) * 0.55;
+    let headYaw = Math.sin(t * 0.9) * 0.25;
+    if (ultron.pointT > 0 && ROOMS[ultron.point]) headYaw = (ROOMS[ultron.point].x + ROOMS[ultron.point].w / 2 > 480 ? 0.9 : -0.9) - bodyRot;
+    const cr = Math.cos(bodyRot), sr = Math.sin(bodyRot), ch = Math.cos(headYaw), sh = Math.sin(headYaw);
+    const breathe = Math.sin(t * 1.4) * 1.2;
+    const proj = ([x, y, z], part) => {
+      if (part === 'h') { const X = x * ch - (z - 3) * sh, Z = x * sh + (z - 3) * ch + 3; x = X; z = Z; }
+      z += Math.max(0, -y - 60) * 0.09; // hunch forward
+      if (y < -50) y += breathe;
+      const X = x * cr - z * sr, Z = x * sr + z * cr;
+      return [cx + X * scale, fy + y * scale, Z];
+    };
     const { segs, hand } = ultronSegments(busy);
-    const flick = 0.85 + Math.random() * 0.15;
-    const scanY = fy - ((t * 60) % 160);
-    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(70,255,154,0.10)';
-    ctx.beginPath(); for (const [a, b] of segs) { const p = proj(a), q = proj(b); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); } ctx.stroke();
+    const flick = 0.8 + Math.random() * 0.2;
+    const scanY = fy - ((t * 70) % 175);
+    ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(70,255,154,0.08)';
+    ctx.beginPath(); for (const [a, b, part] of segs) { const p = proj(a, part), q = proj(b, part); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); } ctx.stroke();
     ctx.lineWidth = 1;
-    for (const [a, b] of segs) {
-      const p = proj(a), q = proj(b), z = (p[2] + q[2]) / 2;
+    for (const [a, b, part] of segs) {
+      const p = proj(a, part), q = proj(b, part), z = (p[2] + q[2]) / 2;
       const near = Math.abs((p[1] + q[1]) / 2 - scanY) < 6;
-      ctx.globalAlpha = Math.max(0.15, Math.min(1, (0.45 + z / 40) * flick + (near ? 0.5 : 0)));
-      ctx.strokeStyle = near ? '#d8ffe9' : (s.err ? C.bad : C.g);
+      ctx.globalAlpha = Math.max(0.12, Math.min(1, (0.4 + z / 45) * flick + (near ? 0.5 : 0)));
+      ctx.strokeStyle = near ? (busy ? '#ffb3b3' : '#d8ffe9') : (s.err ? C.bad : C.g);
       ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
     }
-    // eyes + core
-    const eyeL = proj([-4, -124, 9.5]), eyeR = proj([4, -124, 9.5]);
-    if (eyeL[2] > -2) { ctx.globalAlpha = 1; px(eyeL[0] - 1.5, eyeL[1] - 1, 3, 2, busy ? '#fff' : '#bfffe0'); px(eyeR[0] - 1.5, eyeR[1] - 1, 3, 2, busy ? '#fff' : '#bfffe0'); }
-    const core = proj([0, -84, 9]);
-    const pulse = busy ? 0.6 + 0.4 * Math.sin(t * 10) : 0.5 + 0.2 * Math.sin(t * 2);
-    const cg = ctx.createRadialGradient(core[0], core[1], 0, core[0], core[1], 10);
-    cg.addColorStop(0, `rgba(216,255,233,${pulse})`); cg.addColorStop(1, 'rgba(70,255,154,0)');
-    ctx.globalAlpha = 1; ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(core[0], core[1], 10, 0, 7); ctx.fill();
-    // beam to the room it is delegating to
-    if (hand && ultron.pointT > 0) {
-      const h = proj(hand), tr = ROOMS[ultron.point];
-      const tx = tr.x + tr.w / 2, ty = tr.y + tr.h / 2;
-      ctx.globalAlpha = Math.min(1, ultron.pointT) * 0.7; ctx.strokeStyle = C.g; ctx.lineWidth = 1.5; ctx.setLineDash([2, 5]); ctx.lineDashOffset = -t * 60;
-      ctx.beginPath(); ctx.moveTo(h[0], h[1]); ctx.lineTo(tx, ty); ctx.stroke(); ctx.setLineDash([]);
+    // red visor slit + eyes
+    const vl = proj([-10, -138, 16], 'h'), vr = proj([10, -138, 16], 'h'), vm = proj([0, -136, 18], 'h');
+    if (vm[2] > -4) {
+      const flare = busy ? 0.75 + 0.25 * Math.sin(t * 14) : 0.65 + 0.15 * Math.sin(t * 2);
+      ctx.globalAlpha = 0.35 * flare; ctx.strokeStyle = RED; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(vl[0], vl[1]); ctx.lineTo(vm[0], vm[1]); ctx.lineTo(vr[0], vr[1]); ctx.stroke();
+      ctx.globalAlpha = flare; ctx.lineWidth = 2; ctx.strokeStyle = RED; ctx.beginPath(); ctx.moveTo(vl[0], vl[1]); ctx.lineTo(vm[0], vm[1]); ctx.lineTo(vr[0], vr[1]); ctx.stroke();
+      const e1 = proj([-5, -137, 17], 'h'), e2 = proj([5, -137, 17], 'h');
+      ctx.globalAlpha = 1; px(e1[0] - 1.5, e1[1] - 1.5, 3, 3, '#ffe0e0'); px(e2[0] - 1.5, e2[1] - 1.5, 3, 3, '#ffe0e0');
+      ctx.lineWidth = 1;
     }
-    ctx.globalAlpha = 1;
-    // scanlines over the figure
-    ctx.globalAlpha = 0.12; for (let yy = fy - 140; yy < fy; yy += 3) px(cx - 60, yy, 120, 1, '#000'); ctx.globalAlpha = 1;
-    placeBubble('ultron', cx, fy - 150);
+    // reactor core
+    const core = proj([0, -94, 20], 'b');
+    const pulse = busy ? 0.65 + 0.35 * Math.sin(t * 10) : 0.45 + 0.2 * Math.sin(t * 2);
+    const cg = ctx.createRadialGradient(core[0], core[1], 0, core[0], core[1], 13);
+    cg.addColorStop(0, `rgba(255,220,220,${pulse})`); cg.addColorStop(0.35, `rgba(255,59,59,${pulse * 0.8})`); cg.addColorStop(1, 'rgba(255,59,59,0)');
+    ctx.globalAlpha = 1; ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(core[0], core[1], 13, 0, 7); ctx.fill();
+    // order beam from the clawed hand to the room
+    if (hand && ultron.pointT > 0) {
+      const h = proj(hand, 'b'), tr = ROOMS[ultron.point];
+      const tx = tr.x + tr.w / 2, ty = tr.y + tr.h / 2;
+      ctx.globalAlpha = Math.min(1, ultron.pointT) * 0.8; ctx.strokeStyle = RED; ctx.lineWidth = 1.5; ctx.setLineDash([3, 5]); ctx.lineDashOffset = -t * 70;
+      ctx.beginPath(); ctx.moveTo(h[0], h[1]); ctx.lineTo(tx, ty); ctx.stroke(); ctx.setLineDash([]);
+      ctx.globalAlpha = 0.6; px(h[0] - 3, h[1] - 3, 6, 6, RED);
+    }
+    ctx.globalAlpha = 0.12; for (let yy = fy - 160; yy < fy; yy += 3) px(cx - 70, yy, 140, 1, '#000'); ctx.globalAlpha = 1;
+    placeBubble('ultron', cx, fy - 162);
   }
 
   function drawPackets(dt) {
@@ -491,6 +552,6 @@
     return { init, setActive: (v) => { active = !!v; } };
   })();
 
-  window.Station = { init, setBusy, packet, highlight, launchShuttle, focus, ROOMS };
+  window.Station = { init, setBusy, packet, highlight, launchShuttle, focus, ROOMS, relayout: () => placeLabels() };
   window.Core = Core;
 })();

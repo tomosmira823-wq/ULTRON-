@@ -47,6 +47,8 @@
       <div class="station-head">
         <h2 class="engr">STATION MAP</h2>
         <div class="mission-chip" id="mission-chip">NO ACTIVE MISSION</div>
+        <span class="tiny dim map-hint">scroll to zoom · drag to move · click an agent</span>
+        <button class="hw-btn" id="btn-expand" title="Expand the map (F)">⤢ EXPAND</button>
       </div>
       <div class="glass station-glass">
         <canvas id="station" width="640" height="360"></canvas>
@@ -307,10 +309,8 @@
       <h3 class="engr sm">CLAUDE</h3>
       <label class="lbl" for="s-akey">ANTHROPIC API KEY <span class="dim" id="s-akey-st"></span></label>
       <input id="s-akey" type="password" placeholder="leave blank to keep current" autocomplete="off">
-      <div class="row">
-        <div class="field"><label class="lbl" for="s-model">AGENT MODEL</label><input id="s-model" type="text"></div>
-        <div class="field"><label class="lbl" for="s-fast">FAST MODEL</label><input id="s-fast" type="text"></div>
-      </div>
+      <div class="lbl">MODEL PER AGENT · Opus = best quality, ~5× the cost of Sonnet · Haiku = fastest, cheapest</div>
+      <div class="row wrap agent-models" id="s-agent-models"></div>
 
       <h3 class="engr sm">PRINTIFY → ETSY</h3>
       <label class="lbl" for="s-pkey">PRINTIFY TOKEN <span class="dim" id="s-pkey-st"></span></label>

@@ -17,10 +17,26 @@
     { id: 'ledger',  name: 'LEDGER',  role: 'Fees, cost, price and profit' },
     { id: 'courier', name: 'COURIER', role: 'Printify upload, Etsy publish, orders to print' },
   ];
+  const AI_AGENTS = ['ultron', 'scout', 'forge', 'scribe', 'auditor'];
+  const MODEL_CHOICES = [['claude-opus-5-5', 'Opus 5.5', 'smartest, priciest'], ['claude-sonnet-5-5', 'Sonnet 5.5', 'balanced'], ['claude-haiku-5-5', 'Haiku 5.5', 'fastest, cheapest']];
+  const modelName = (id) => (MODEL_CHOICES.find((m) => m[0] === id) || [id, id])[1];
+  function resolveModel(v) {
+    const x = String(v || '').toLowerCase().trim();
+    if (/^claude-[a-z0-9.-]+$/.test(x)) return x;
+    const hit = MODEL_CHOICES.find((m) => x.includes(m[1].split(' ')[0].toLowerCase()));
+    return hit ? hit[0] : null;
+  }
+  const modelFor = (agent, fast) => (agent && D.settings.agentModels?.[agent]) || (fast ? D.settings.fast : D.settings.model);
+  function setAgentModel(agent, model, quiet) {
+    D.settings.agentModels = { ...D.settings.agentModels, [agent]: model };
+    persist(); if (!quiet) { log(agent, `Now running on ${modelName(model)}.`, 'ok'); toast(`${agent.toUpperCase()} → ${modelName(model)}`); }
+    if (feedAgent === agent) renderFeed(true);
+  }
   const MODES = { auto: 'FULL AUTO', review: 'REVIEW FIRST', design: 'DESIGN ONLY' };
 
   const DEFAULTS = {
     model: 'claude-sonnet-5-5', fast: 'claude-haiku-5-5',
+    agentModels: { ultron: 'claude-sonnet-5-5', scout: 'claude-sonnet-5-5', forge: 'claude-sonnet-5-5', scribe: 'claude-sonnet-5-5', auditor: 'claude-haiku-5-5' },
     template: 'cottagecore', shopName: '', voice: '', defaultBrief: '',
     mode: 'review', currency: 'GBP', defaultCost: 11, minMargin: 25, vat: true,
     shopId: '', shopTitle: '', shopChannel: '', blueprintId: '', blueprintTitle: '', providerId: '', providerTitle: '',
@@ -104,11 +120,11 @@
 
   // ---------- Claude ----------
   const live = {}, reqAgent = {}; let reqSeq = 0;
-  async function ask(prompt, { fast = false, maxTokens = 4000, agent = null, task = '' } = {}) {
+  async function ask(prompt, { fast = false, maxTokens = 4000, agent = null, task = '', model: forceModel = null } = {}) {
     if (!keys.anthropic) throw new Error('Add your Anthropic API key in Settings.');
     rollDay();
     if (D.settings.tokenCap && D.day.tokens >= D.settings.tokenCap) throw new Error('Daily token cap reached — raise it in Settings or wait until tomorrow.');
-    const model = fast ? D.settings.fast : D.settings.model;
+    const model = forceModel || modelFor(agent, fast);
     const reqId = ++reqSeq;
     if (agent) { live[agent] = { task, text: '', busy: true, at: Date.now() }; reqAgent[reqId] = agent; feedTouch(agent); }
     try {
@@ -461,7 +477,7 @@ Reply with JSON only, issues kept under 12 words each, at most 5 issues: {"score
     catch (e) {
       if (fatal(e)) throw e;
       log('auditor', 'Fast check failed (' + e.message + ') — rechecking with the main model.', 'err');
-      try { Q = await askJSON(auditPrompt, { maxTokens: 2000, agent: 'auditor', task: `Rechecking "${p.trend.phrase}"` }); }
+      try { Q = await askJSON(auditPrompt, { maxTokens: 2000, agent: 'auditor', task: `Rechecking "${p.trend.phrase}"`, model: modelFor('auditor') === D.settings.model ? 'claude-sonnet-5-5' : D.settings.model }); }
       catch (e2) { if (fatal(e2)) throw e2; Q = { score: 0, trademark_risk: 'medium', issues: ['The auditor couldn’t check this one: ' + e2.message], verdict: 'fix' }; }
     }
     p.qa = { score: Math.max(0, Math.min(100, Number(Q.score) || 0)), trademark_risk: ['low', 'medium', 'high'].includes(Q.trademark_risk) ? Q.trademark_risk : 'medium', issues: (Q.issues || []).map(String), verdict: ['pass', 'fix', 'fail'].includes(Q.verdict) ? Q.verdict : 'fix' };
@@ -674,7 +690,7 @@ Reply with JSON only, issues kept under 12 words each, at most 5 issues: {"score
     for (const p of D.products) by[p.status] = (by[p.status] || 0) + 1;
     const sales = D.orders.reduce((a, o) => a + o.sales, 0);
     const top = D.products.filter((p) => p.sales?.qty).sort((a, b) => b.sales.qty - a.sales.qty).slice(0, 5).map((p) => `${p.trend.phrase} (${p.sales.qty})`).join(', ');
-    return `Template: ${tpl().name}. Mode: ${MODES[s.mode]}. Autopilot: ${s.auto ? `on, every ${s.hours}h, ${s.acount} per run, max ${s.maxPerDay}/day` : 'off'}. QA bar ${s.qaMin}. Printify: ${keys.printify ? (s.shopId ? 'connected to ' + s.shopTitle : 'token set, no shop') : 'not connected'}. Product: ${s.blueprintTitle || 'none'} in ${s.colours}.
+    return `Template: ${tpl().name}. Mode: ${MODES[s.mode]}. Autopilot: ${s.auto ? `on, every ${s.hours}h, ${s.acount} per run, max ${s.maxPerDay}/day` : 'off'}. QA bar ${s.qaMin}. Printify: ${keys.printify ? (s.shopId ? 'connected to ' + s.shopTitle : 'token set, no shop') : 'not connected'}. Product: ${s.blueprintTitle || 'none'} in ${s.colours}. Agent models: ${AI_AGENTS.map((a) => `${a} ${modelName(modelFor(a))}`).join(', ')}.
 Products by status: ${JSON.stringify(by)}. Designs today: ${D.day.designs}. Orders: ${D.orders.length}, sales ${money(sales)}, profit ${money(D.orders.reduce((a, o) => a + orderProfit(o), 0))}. Best sellers: ${top || 'none yet'}.
 ${salesInsight()}
 Recent designs: ${D.products.slice(-10).map((p) => `${p.trend?.phrase} [${p.status}${p.qa ? ', QA ' + p.qa.score : ''}]`).join('; ')}`;
@@ -698,6 +714,7 @@ Available actions (use only when the owner asks for them or clearly wants them):
 - {"type":"autopilot","on":true|false}
 - {"type":"set","field":"mode"|"hours"|"acount"|"maxPerDay"|"qaMin"|"defaultBrief"|"colours","value":...}  mode is "auto","review" or "design"
 - {"type":"sync"} pull orders and sales now
+- {"type":"model","agent":"ultron"|"scout"|"forge"|"scribe"|"auditor"|"all","model":"opus"|"sonnet"|"haiku"} switch the Claude model an agent uses (Opus = best quality but roughly 5x Sonnet's cost; Haiku = fastest and cheapest, fine for checks)
 - {"type":"show","status":"review"|"published"|"ready"|"failed"|"all"} show those products in the terminal
 Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}`, { maxTokens: 1500, agent: 'ultron', task: 'Answering you' });
       D.chat.push({ role: 'ultron', text: String(r.reply || 'Done.'), ts: Date.now() });
@@ -725,6 +742,12 @@ Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}
       else return;
       note(`▶ ${f} set to ${f === 'mode' ? MODES[v] : v}`); persist(); renderAll();
     } else if (a.type === 'sync') { note('▶ Syncing orders'); await syncAll(false); }
+    else if (a.type === 'model') {
+      const m = resolveModel(a.model); if (!m) return note('▶ Unknown model: ' + a.model);
+      const who = a.agent === 'all' ? AI_AGENTS : AI_AGENTS.includes(a.agent) ? [a.agent] : [];
+      for (const ag of who) setAgentModel(ag, m, true);
+      if (who.length) note(`▶ ${a.agent === 'all' ? 'All agents' : a.agent.toUpperCase()} now on ${modelName(m)}`);
+    }
     else if (a.type === 'show') { $('#filter').value = ['review', 'published', 'ready', 'failed'].includes(a.status) ? a.status : 'all'; showTab('pipeline'); renderPipeline(); }
   }
   function renderChat() {
@@ -939,6 +962,14 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
       box.style.setProperty('--agent', Station.ROOMS[feedAgent].color);
       const head = el('div', 'feed-head');
       head.append(el('span', 'led', ''), el('b', '', a.name), el('span', 'feed-role', a.role));
+      if (AI_AGENTS.includes(feedAgent)) {
+        const sel = el('select', 'feed-model'); sel.title = 'Which Claude model this agent thinks with';
+        const curM = modelFor(feedAgent);
+        const opts = MODEL_CHOICES.some((m) => m[0] === curM) ? MODEL_CHOICES : [...MODEL_CHOICES, [curM, curM, 'custom']];
+        for (const [id, n, d] of opts) { const o = el('option', '', `${n} · ${d}`); o.value = id; sel.append(o); }
+        sel.value = curM; sel.onchange = () => setAgentModel(feedAgent, sel.value);
+        head.append(sel);
+      }
       const x = el('button', 'wc close', '✕'); x.title = 'Back to the station'; x.onclick = () => selectAgent(null); head.append(x);
       box.append(head, el('div', 'feed-now'), el('div', 'feed-widget'), el('div', 'lbl', 'LIVE OUTPUT'), el('pre', 'feed-term'), el('div', 'lbl', 'RECENT'), el('div', 'feed-recent'));
     }
@@ -1337,7 +1368,13 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     $('#s-qa').value = s.qaMin; $('#s-retire').value = s.retireDays; $('#s-tokcap').value = s.tokenCap;
     $('#s-approve').checked = s.autoApprove; $('#s-winners').checked = s.winners;
     $('#s-login').checked = prefs.openAtLogin; $('#s-tray').checked = prefs.closeToTray;
-    $('#s-model').value = s.model; $('#s-fast').value = s.fast;
+    const am = $('#s-agent-models'); am.textContent = '';
+    for (const ag of AI_AGENTS) {
+      const f = el('div', 'field'); const l = el('label', 'lbl', ag.toUpperCase()); l.htmlFor = 's-am-' + ag;
+      const sel = el('select'); sel.id = 's-am-' + ag; const curM = modelFor(ag);
+      for (const [id, n] of MODEL_CHOICES.some((m) => m[0] === curM) ? MODEL_CHOICES : [...MODEL_CHOICES, [curM, curM]]) { const o = el('option', '', n); o.value = id; sel.append(o); }
+      sel.value = curM; f.append(l, sel); am.append(f);
+    }
     $('#s-cur').value = s.currency; $('#s-cost').value = s.defaultCost; $('#s-minm').value = s.minMargin; $('#s-vat').checked = s.vat;
     $('#s-colours').value = s.colours;
     fillSelect('#s-shop', s.shopId ? [{ id: s.shopId, title: s.shopTitle }] : [], s.shopId, 'Load shops first');
@@ -1388,6 +1425,16 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     };
     $('#btn-abort').onclick = () => { abortFlag = true; log('ultron', 'Abort requested — finishing current step…', 'err'); };
     $('#btn-auto').onclick = () => setAuto(!D.settings.auto);
+    const expand = (on) => {
+      const deck = $('.deck'); on = on ?? !deck.classList.contains('map-max');
+      deck.classList.toggle('map-max', on); $('#btn-expand').textContent = on ? '⤡ SHRINK' : '⤢ EXPAND';
+      requestAnimationFrame(() => Station.relayout());
+    };
+    $('#btn-expand').onclick = () => expand();
+    document.addEventListener('keydown', (e) => {
+      if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === 'f' || e.key === 'F') expand();
+    });
     $('#log-clear').onclick = () => { D.log = []; renderLog(); persist(); };
     $$('.ctab').forEach((b) => (b.onclick = () => showCtab(b.dataset.ctab)));
     $('#chat-send').onclick = chatSend;
@@ -1496,7 +1543,7 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
       s.mode = $('#s-mode').value; s.hours = Math.max(1, +$('#s-hours').value || 6); s.acount = Math.max(1, Math.min(12, +$('#s-acount').value || 3)); s.maxPerDay = Math.max(1, +$('#s-cap').value || 10);
       s.qaMin = Math.max(0, Math.min(100, +$('#s-qa').value || 0)); s.retireDays = Math.max(0, +$('#s-retire').value || 0); s.tokenCap = Math.max(0, +$('#s-tokcap').value || 0);
       s.autoApprove = $('#s-approve').checked; s.winners = $('#s-winners').checked;
-      s.model = $('#s-model').value.trim() || DEFAULTS.model; s.fast = $('#s-fast').value.trim() || DEFAULTS.fast;
+      s.agentModels = { ...s.agentModels }; for (const ag of AI_AGENTS) s.agentModels[ag] = $('#s-am-' + ag).value;
       s.currency = $('#s-cur').value; s.defaultCost = Number($('#s-cost').value) || DEFAULTS.defaultCost; s.minMargin = Number($('#s-minm').value) || 0; s.vat = $('#s-vat').checked;
       const shop = $('#s-shop'); if (shop.value && shop.value !== s.shopId) { s.shopId = shop.value; s.shopTitle = shop.selectedOptions[0].textContent.replace(/ \(\w+\)$/, ''); s.shopChannel = (shop.selectedOptions[0].textContent.match(/\((\w+)\)$/) || [])[1] || s.shopChannel; }
       s.colours = $('#s-colours').value;
@@ -1524,7 +1571,7 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
   async function boot() {
     const saved = await kivo.load();
     if (saved && saved.products) {
-      D = { ...D, ...saved, settings: { ...DEFAULTS, ...(saved.settings || {}) }, ui: { ...D.ui, ...(saved.ui || {}) }, day: saved.day || D.day, history: saved.history || {}, chat: saved.chat || [] };
+      D = { ...D, ...saved, settings: { ...DEFAULTS, ...(saved.settings || {}), agentModels: { ...DEFAULTS.agentModels, ...(saved.settings?.agentModels || {}) } }, ui: { ...D.ui, ...(saved.ui || {}) }, day: saved.day || D.day, history: saved.history || {}, chat: saved.chat || [] };
       if (saved.setupDone === undefined) D.setupDone = true; // upgrading from 1.0
     }
     for (const p of D.products) {

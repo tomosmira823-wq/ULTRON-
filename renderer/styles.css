@@ -411,3 +411,13 @@ tr.click:hover td { background: rgba(70,255,154,.04); }
 .crew:hover { border-color: var(--agent); }
 .cal { margin-top: 8px; }
 .cal-row { display: grid; grid-template-columns: minmax(0, 1fr) 40px auto; gap: 8px; align-items: center; font-size: 12px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+.feed-model { width: auto; max-width: 190px; padding: 3px 6px; font-size: 13px; }
+.agent-models .field { flex: 1 1 100px; }
+/* expanded map */
+.station-head { flex-wrap: nowrap; }
+.station-head .map-hint { margin-left: auto; white-space: nowrap; }
+.deck.map-max { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); grid-template-areas: "station"; }
+.deck.map-max > .roster, .deck.map-max > .commander, .deck.map-max > .terminal { display: none; }
+.deck.map-max .feed { width: 36%; }
+#station { cursor: grab; }
+@media (max-width: 1300px) { .station-head .map-hint { display: none; } }
