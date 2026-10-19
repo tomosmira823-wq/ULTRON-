@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self'">
+<title>Kivo Ultron</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- TITLE BAR -->
+  <header class="titlebar metal">
+    <div class="brand">
+      <span class="asterisk">✱</span>
+      <span class="wordmark">KIVO</span>
+      <span class="sub">ULTRON&nbsp;/&nbsp;AUTONOMOUS COMMERCE STATION</span>
+    </div>
+    <div class="readouts" id="readouts">
+      <div class="ro"><label>SALES</label><b id="ro-sales">—</b></div>
+      <div class="ro"><label>ORDERS</label><b id="ro-orders">—</b></div>
+      <div class="ro"><label>LIVE</label><b id="ro-live">0</b></div>
+      <div class="ro"><label>PIPELINE</label><b id="ro-pipe">0</b></div>
+      <div class="ro"><label>AVG MARGIN</label><b id="ro-margin">—</b></div>
+      <div class="ro"><label>AGENTS</label><b id="ro-agents">8 ONLINE</b></div>
+    </div>
+    <div class="winctl">
+      <button id="btn-update" class="upd" hidden>UPDATE READY · RESTART</button>
+      <button id="btn-settings" class="hw-btn" title="Settings">SETTINGS</button>
+      <button class="wc" id="wc-min" title="Minimise">&#x2013;</button>
+      <button class="wc" id="wc-max" title="Maximise">&#x25A1;</button>
+      <button class="wc close" id="wc-close" title="Close">&#x2715;</button>
+    </div>
+  </header>
+
+  <main class="deck">
+    <!-- ROSTER -->
+    <aside class="roster metal panel screws">
+      <h2 class="engr">CREW ROSTER</h2>
+      <ul id="roster"></ul>
+      <div class="roster-foot">
+        <div class="led-row"><span class="led" id="led-auto"></span><span id="auto-label">AUTOPILOT OFF</span></div>
+        <div class="tiny" id="next-run"></div>
+      </div>
+    </aside>
+
+    <!-- STATION -->
+    <section class="station-wrap metal panel screws">
+      <div class="station-head">
+        <h2 class="engr">STATION MAP</h2>
+        <div class="mission-chip" id="mission-chip">NO ACTIVE MISSION</div>
+      </div>
+      <div class="glass station-glass" id="station-glass">
+        <canvas id="station" width="640" height="360"></canvas>
+        <div id="room-labels"></div>
+        <div class="scan"></div>
+      </div>
+    </section>
+
+    <!-- COMMANDER -->
+    <aside class="commander metal panel screws">
+      <div class="cmd-top">
+        <div class="glass core-glass"><canvas id="core" width="220" height="220"></canvas></div>
+        <div class="cmd-id">
+          <h2 class="engr">ULTRON</h2>
+          <div class="tiny">STATION COMMANDER</div>
+          <div class="tiny dim" id="cmd-state">Standing by.</div>
+          <div class="kv"><span>MODEL</span><b id="cmd-model">—</b></div>
+          <div class="kv"><span>CALLS</span><b id="cmd-calls">0</b></div>
+          <div class="kv"><span>TOKENS</span><b id="cmd-tokens">0</b></div>
+        </div>
+      </div>
+
+      <label class="lbl" for="brief">MISSION BRIEF</label>
+      <textarea id="brief" rows="3" spellcheck="false" placeholder="e.g. Women's soft floral shirts for spring, cosy book-club and coffee themes"></textarea>
+      <div class="row">
+        <div class="field">
+          <label class="lbl" for="count">DESIGNS</label>
+          <div class="stepper"><button id="cnt-dn">−</button><input id="count" type="number" min="1" max="12" value="4"><button id="cnt-up">+</button></div>
+        </div>
+        <div class="field">
+          <label class="lbl" for="tone">GARMENT</label>
+          <select id="tone"><option value="light">Light shirts</option><option value="dark">Dark shirts</option></select>
+        </div>
+      </div>
+      <div class="row">
+        <label class="chk"><input type="checkbox" id="auto-push"> Push to Printify</label>
+        <label class="chk"><input type="checkbox" id="auto-publish"> Publish to Etsy</label>
+      </div>
+      <div class="row">
+        <button class="hw-btn big go" id="btn-run">RUN MISSION</button>
+        <button class="hw-btn big" id="btn-abort" disabled>ABORT</button>
+      </div>
+
+      <div class="log-head"><span class="lbl">COMMS LOG</span><button class="link" id="log-clear">clear</button></div>
+      <div class="glass log" id="log"></div>
+    </aside>
+
+    <!-- PRODUCTION TERMINAL -->
+    <section class="terminal metal panel screws">
+      <div class="term-head">
+        <h2 class="engr">ETSY PRODUCTION TERMINAL</h2>
+        <nav class="tabs">
+          <button class="tab on" data-tab="pipeline">PIPELINE</button>
+          <button class="tab" data-tab="orders">ORDERS</button>
+        </nav>
+        <div class="term-actions">
+          <select id="filter"><option value="all">All</option><option value="ready">Ready</option><option value="uploaded">On Printify</option><option value="published">Live on Etsy</option><option value="failed">Failed</option></select>
+          <button class="hw-btn" id="btn-export">EXPORT READY</button>
+          <button class="hw-btn" id="btn-sync">SYNC ORDERS</button>
+        </div>
+      </div>
+      <div class="glass term-body">
+        <div id="tab-pipeline" class="pipeline"></div>
+        <div id="tab-orders" class="orders" hidden></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- PRODUCT DRAWER -->
+<div class="overlay" id="drawer" hidden>
+  <div class="sheet metal screws">
+    <div class="sheet-head"><h2 class="engr" id="d-title">PRODUCT</h2><button class="wc close" id="d-close">&#x2715;</button></div>
+    <div class="sheet-body drawer-grid">
+      <div class="glass art" id="d-art"></div>
+      <div class="d-form">
+        <div class="pill-row" id="d-pills"></div>
+        <label class="lbl" for="d-ltitle">LISTING TITLE <span class="dim" id="d-tlen"></span></label>
+        <textarea id="d-ltitle" rows="2"></textarea>
+        <label class="lbl" for="d-tags">TAGS (13 max, 20 chars each, comma separated)</label>
+        <textarea id="d-tags" rows="2"></textarea>
+        <label class="lbl" for="d-desc">DESCRIPTION</label>
+        <textarea id="d-desc" rows="5"></textarea>
+        <div class="row">
+          <div class="field"><label class="lbl" for="d-price">PRICE</label><input id="d-price" type="number" step="0.01" min="0"></div>
+          <div class="field"><label class="lbl" for="d-cost">PRODUCTION COST</label><input id="d-cost" type="number" step="0.01" min="0"></div>
+        </div>
+        <div class="glass ledger" id="d-ledger"></div>
+        <div class="glass qa" id="d-qa"></div>
+        <div class="row wrap">
+          <button class="hw-btn" id="d-save">SAVE</button>
+          <button class="hw-btn" id="d-redo">REDESIGN</button>
+          <button class="hw-btn" id="d-png">EXPORT PNG</button>
+          <button class="hw-btn" id="d-svg">EXPORT SVG</button>
+          <button class="hw-btn go" id="d-push">PUSH TO PRINTIFY</button>
+          <button class="hw-btn go" id="d-pub">PUBLISH TO ETSY</button>
+          <button class="hw-btn danger" id="d-del">DELETE</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="overlay" id="settings" hidden>
+  <div class="sheet metal screws narrow">
+    <div class="sheet-head"><h2 class="engr">SETTINGS</h2><button class="wc close" id="s-close">&#x2715;</button></div>
+    <div class="sheet-body">
+      <h3 class="engr sm">CLAUDE</h3>
+      <label class="lbl" for="s-akey">ANTHROPIC API KEY <span class="dim" id="s-akey-st"></span></label>
+      <input id="s-akey" type="password" placeholder="sk-ant-…  (leave blank to keep current)" autocomplete="off">
+      <div class="row">
+        <div class="field"><label class="lbl" for="s-model">AGENT MODEL</label><input id="s-model" type="text"></div>
+        <div class="field"><label class="lbl" for="s-fast">FAST MODEL (scout/QA)</label><input id="s-fast" type="text"></div>
+      </div>
+
+      <h3 class="engr sm">PRINTIFY → ETSY</h3>
+      <p class="tiny dim">Connect your Etsy shop inside Printify first, then make a Personal Access Token at printify.com → My profile → Connections.</p>
+      <label class="lbl" for="s-pkey">PRINTIFY TOKEN <span class="dim" id="s-pkey-st"></span></label>
+      <input id="s-pkey" type="password" placeholder="leave blank to keep current" autocomplete="off">
+      <div class="row"><button class="hw-btn" id="s-load-shops">LOAD SHOPS</button><span class="tiny dim" id="s-pf-msg"></span></div>
+      <label class="lbl" for="s-shop">SHOP</label><select id="s-shop"></select>
+      <label class="lbl" for="s-bp-search">PRODUCT (blueprint)</label>
+      <div class="row"><input id="s-bp-search" type="text" placeholder="search e.g. Gildan 5000, Comfort Colors 1717"><button class="hw-btn" id="s-bp-find">FIND</button></div>
+      <select id="s-bp"></select>
+      <label class="lbl" for="s-pp">PRINT PROVIDER</label><select id="s-pp"></select>
+      <label class="lbl" for="s-colours">COLOURS TO ENABLE (comma separated, matched against variant names)</label>
+      <input id="s-colours" type="text" placeholder="White, Natural, Light Pink">
+      <div class="tiny dim" id="s-var-msg"></div>
+
+      <h3 class="engr sm">PRICING</h3>
+      <div class="row">
+        <div class="field"><label class="lbl" for="s-cur">CURRENCY</label><select id="s-cur"><option>GBP</option><option>USD</option><option>EUR</option></select></div>
+        <div class="field"><label class="lbl" for="s-cost">DEFAULT COST</label><input id="s-cost" type="number" step="0.01"></div>
+        <div class="field"><label class="lbl" for="s-minm">MIN MARGIN %</label><input id="s-minm" type="number" step="1"></div>
+      </div>
+      <label class="chk"><input type="checkbox" id="s-vat"> I'm VAT-charged on Etsy fees (UK sellers: +20%)</label>
+
+      <h3 class="engr sm">AUTOPILOT</h3>
+      <label class="chk"><input type="checkbox" id="s-auto"> Run a mission automatically while the app is open</label>
+      <div class="row">
+        <div class="field"><label class="lbl" for="s-hours">EVERY (HOURS)</label><input id="s-hours" type="number" min="1" step="1"></div>
+        <div class="field"><label class="lbl" for="s-acount">DESIGNS PER RUN</label><input id="s-acount" type="number" min="1" max="12"></div>
+      </div>
+      <label class="lbl" for="s-abrief">AUTOPILOT BRIEF (blank = use Mission Brief)</label>
+      <textarea id="s-abrief" rows="2"></textarea>
+
+      <div class="row end"><span class="tiny dim" id="s-ver"></span><button class="hw-btn go big" id="s-save">SAVE SETTINGS</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" hidden></div>
+<script src="station.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

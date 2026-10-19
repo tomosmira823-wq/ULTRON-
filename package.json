@@ -1,0 +1,75 @@
+{
+  "name": "kivo-ultron",
+  "version": "1.0.0",
+  "description": "Kivo Ultron — autonomous AI commerce station",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --x64",
+    "release": "electron-builder --win nsis --x64 --publish always"
+  },
+  "author": "Kivo",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.1.0",
+    "@fontsource/michroma": "^5.1.0",
+    "@fontsource/vt323": "^5.1.0",
+    "electron-log": "^5.2.4",
+    "electron-updater": "^6.3.9",
+    "png-to-ico": "^2.1.8",
+    "pngjs": "^7.0.0"
+  },
+  "productName": "Kivo Ultron",
+  "build": {
+    "appId": "com.kivo.ultron",
+    "productName": "Kivo Ultron",
+    "copyright": "© Kivo",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "Kivo-Ultron-Setup-${version}.${ext}",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Kivo Ultron",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "runAfterFinish": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "tomosmira823-wq",
+        "repo": "ULTRON-",
+        "releaseType": "release"
+      }
+    ]
+  }
+}
