@@ -15,5 +15,10 @@ contextBridge.exposeInMainWorld('kivo', {
   onUpdate: (fn) => ipcRenderer.on('update:state', (_e, v) => fn(v)),
   installUpdate: () => ipcRenderer.send('update:install'),
   version: () => ipcRenderer.invoke('app:version'),
+  getPrefs: () => ipcRenderer.invoke('prefs:get'),
+  setPrefs: (p) => ipcRenderer.invoke('prefs:set', p),
+  trayState: (st) => ipcRenderer.send('tray:state', st),
+  onTray: (fn) => ipcRenderer.on('tray:cmd', (_e, c) => fn(c)),
+  notify: (title, body) => ipcRenderer.send('notify', { title, body }),
   openUrl: (u) => ipcRenderer.send('open:url', u),
 });
