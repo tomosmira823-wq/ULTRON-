@@ -1,0 +1,22 @@
+name: Release
+# Builds the Windows installer and publishes it as a GitHub release.
+# Installed copies of Kivo Ultron auto-update from these releases.
+# Run it from the Actions tab (Run workflow) or by pushing a tag like v1.0.1.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx electron-builder --win nsis --x64 --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
