@@ -36,6 +36,8 @@
   let keys = { anthropic: false, printify: false };
   let prefs = { closeToTray: true, openAtLogin: true };
   let running = false, abortFlag = false, logFilter = null, openId = null, syncing = false;
+  let feedAgent = null, lastPlan = null, lastTrends = [], courierRun = null;
+  const cur = {};
   const agentState = {};
 
   // ---------- persistence ----------
@@ -59,7 +61,7 @@
   }
 
   function log(agent, msg, kind) {
-    D.log.push({ ts: Date.now(), agent, msg, kind: kind || '' });
+    D.log.push({ ts: Date.now(), agent, msg, kind: kind || '' }); feedTouch(agent);
     if (D.log.length > 600) D.log.splice(0, D.log.length - 600);
     renderLog(); persist();
   }
@@ -79,7 +81,7 @@
     agentState[id] = { status, text: text || '', err: !!err };
     Station.setBusy(id, status === 'WORKING', text || '', err);
     if (id === 'ultron') Core.setActive(status === 'WORKING');
-    renderRoster();
+    renderRoster(); feedTouch(id); if (feedAgent === 'ultron') feedTouch('ultron');
   }
   function renderRoster() {
     const ul = $('#roster'); ul.textContent = '';
@@ -94,22 +96,28 @@
     }
   }
   function selectAgent(id) {
-    logFilter = logFilter === id ? null : id;
-    Station.highlight(logFilter);
-    renderRoster(); renderLog();
-    if (logFilter) showCtab('log');
+    const next = id && feedAgent !== id ? id : null;
+    feedAgent = next; logFilter = next;
+    Station.focus(next); Station.highlight(next);
+    renderRoster(); renderLog(); renderFeed(true);
   }
 
   // ---------- Claude ----------
-  async function ask(prompt, { fast = false, maxTokens = 4000 } = {}) {
+  const live = {}, reqAgent = {}; let reqSeq = 0;
+  async function ask(prompt, { fast = false, maxTokens = 4000, agent = null, task = '' } = {}) {
     if (!keys.anthropic) throw new Error('Add your Anthropic API key in Settings.');
     rollDay();
     if (D.settings.tokenCap && D.day.tokens >= D.settings.tokenCap) throw new Error('Daily token cap reached — raise it in Settings or wait until tomorrow.');
     const model = fast ? D.settings.fast : D.settings.model;
-    const r = await kivo.ask({ prompt, model, maxTokens });
-    D.day.tokens += (r.usage.input_tokens || 0) + (r.usage.output_tokens || 0);
-    renderCmd(); persist();
-    return r.text;
+    const reqId = ++reqSeq;
+    if (agent) { live[agent] = { task, text: '', busy: true, at: Date.now() }; reqAgent[reqId] = agent; feedTouch(agent); }
+    try {
+      const r = await kivo.ask({ prompt, model, maxTokens, stream: !!agent, reqId });
+      if (agent) live[agent].text = r.text;
+      D.day.tokens += (r.usage.input_tokens || 0) + (r.usage.output_tokens || 0);
+      renderCmd(); persist();
+      return r.text;
+    } finally { if (agent) { live[agent].busy = false; delete reqAgent[reqId]; feedTouch(agent); } }
   }
   function parseJSON(text) {
     const f = text.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -130,8 +138,38 @@
   }
   function shopContext() {
     const s = D.settings, t = tpl();
-    return `Today is ${new Date().toDateString()}. Shop: ${s.shopName || 'an Etsy print-on-demand shop'}. Brand voice: ${s.voice || t.voice}. Shop focus: ${s.defaultBrief || t.brief}`;
+    return `Today is ${new Date().toDateString()}. Shop: ${s.shopName || 'an Etsy print-on-demand shop'}. Brand voice: ${s.voice || t.voice}. Shop focus: ${s.defaultBrief || t.brief}
+Selling calendar (made-to-order shirts take ~10 days to arrive, new listings take a few days to show in search): ${calendarText()}.
+Calendar rules: PRIME = the best holidays to design for now. LAST CHANCE = only worth it for quick wins, at most one design. TOO LATE = don't design for it, unless the owner's brief explicitly asks for it. EARLY = fine for a head start. If the owner's brief names a holiday, always follow the brief.`;
   }
+
+  // ---------- selling calendar ----------
+  // Print-on-demand needs ~10 days from order to doorstep, and a new Etsy listing needs a few days to show in search.
+  function easter(y) { const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1; return new Date(y, mo - 1, da); }
+  const nthDow = (y, m, dow, n) => { const d = new Date(y, m, 1); const off = (dow - d.getDay() + 7) % 7; return new Date(y, m, 1 + off + (n - 1) * 7); };
+  function sellingCalendar(now = new Date()) {
+    const uk = D.settings.currency === 'GBP', out = [];
+    for (const y of [now.getFullYear(), now.getFullYear() + 1]) {
+      const e = easter(y), thanks = nthDow(y, 10, 4, 4);
+      const list = [
+        ['New Year', new Date(y, 0, 1)], ['Valentine’s Day', new Date(y, 1, 14)], ['St Patrick’s Day', new Date(y, 2, 17)],
+        ['Mother’s Day', uk ? new Date(e.getFullYear(), e.getMonth(), e.getDate() - 21) : nthDow(y, 4, 0, 2)], ['Easter', e],
+        ['Father’s Day', nthDow(y, 5, 0, 3)], ['Pride Month', new Date(y, 5, 1)], ['Graduation season', new Date(y, 5, 15)], ['Summer holidays', new Date(y, 6, 20)],
+        ['Back to school', new Date(y, 8, 1)], ['Halloween', new Date(y, 9, 31)], ['Bonfire Night', uk ? new Date(y, 10, 5) : null],
+        ['Thanksgiving', uk ? null : thanks], ['Black Friday & Cyber Monday', new Date(thanks.getFullYear(), 10, thanks.getDate() + 1)], ['Christmas', new Date(y, 11, 25)],
+      ];
+      for (const [name, date] of list) {
+        if (!date) continue;
+        const days = Math.ceil((date - now) / DAY);
+        if (days < -1 || days > 150) continue;
+        const cutoff = days - 10; // last order date for delivery on time
+        const status = cutoff < 3 ? 'TOO LATE' : cutoff < 14 ? 'LAST CHANCE' : days <= 75 ? 'PRIME' : 'EARLY';
+        out.push({ name, date, days, status });
+      }
+    }
+    return out.sort((a, b) => a.days - b.days);
+  }
+  const calendarText = () => sellingCalendar().map((h) => `${h.name} (${h.date.toDateString().slice(4, 10)}, ${h.days} days away): ${h.status}`).join('; ');
 
   // ---------- SVG ----------
   function sanitizeSVG(raw) {
@@ -204,7 +242,7 @@
     const mode = opts.mode || D.settings.mode;
     const tone = opts.tone || D.ui.tone || tpl().tone;
     running = true; abortFlag = false; uiRunning(true);
-    const made = [];
+    const made = []; let parked = 0;
     try {
       setAgent('ultron', 'WORKING', 'Planning mission');
       log('ultron', `Mission received: "${brief}" · ${count} designs · ${tone} shirts · ${MODES[mode]}`);
@@ -227,7 +265,8 @@ Shirts: ${tone === 'dark' ? 'dark (black/charcoal/navy)' : 'light (white/cream/p
 Sales data: ${insights}
 ${D.settings.winners ? 'If there are best sellers, use up to a third of the angles for fresh variations on what is selling (new phrase, same buyer and style). Avoid styles that are not selling.' : ''}
 Phrases already made (never repeat): ${existing.join(' | ') || 'none'}
-Reply with JSON only: {"codename": "two-word codename", "directive": "2 sentences telling the scout what to hunt for", "angles": ["${count} distinct angles, each a few words"]}`, { fast: true, maxTokens: 900 });
+Reply with JSON only: {"codename": "two-word codename", "directive": "2 sentences telling the scout what to hunt for", "angles": ["${count} distinct angles, each a few words"]}`, { fast: true, maxTokens: 900, agent: 'ultron', task: 'Planning the mission' });
+      lastPlan = plan;
       checkAbort();
       $('#mission-chip').textContent = `MISSION ${String(plan.codename || 'UNNAMED').toUpperCase()} · ${count} DESIGNS`;
       log('ultron', `Codename ${plan.codename}. ${plan.directive}`, 'ok');
@@ -242,9 +281,10 @@ Angles (one concept each): ${(plan.angles || []).join('; ')}
 Brief: ${brief}
 Avoid these existing phrases: ${existing.join(' | ') || 'none'}
 Rules: original phrases only. No trademarks, brands, franchises, celebrities, characters, sports teams, real book/film/song titles or lyrics. Think about what Etsy buyers search for and gift.
-Reply with a JSON array of ${count} objects: {"phrase": "the words printed on the shirt (short)", "niche": "...", "audience": "who buys it", "style": "visual style", "palette": ["#hex", "#hex", "#hex"], "why": "one sentence why it sells", "keywords": ["5 search keywords"]}`, { maxTokens: 2500 });
+Reply with a JSON array of ${count} objects: {"phrase": "the words printed on the shirt (short)", "niche": "...", "audience": "who buys it", "style": "visual style", "palette": ["#hex", "#hex", "#hex"], "why": "one sentence why it sells", "keywords": ["5 search keywords"]}`, { maxTokens: 2500, agent: 'scout', task: 'Scanning for trends' });
       checkAbort();
       const list = (Array.isArray(trends) ? trends : trends.items || trends.concepts || []).filter((x) => x && x.phrase).slice(0, count);
+      lastTrends = list;
       if (!list.length) throw new Error('Scout came back empty');
       log('scout', `Found ${list.length} concepts: ${list.map((x) => '"' + x.phrase + '"').join(', ')}`, 'ok');
       setAgent('scout', 'IDLE');
@@ -257,16 +297,10 @@ Reply with a JSON array of ${count} objects: {"phrase": "the words printed on th
 
       for (const p of items) {
         checkAbort();
-        try { await produce(p, mode); made.push(p); }
-        catch (e) {
-          if (e.message === 'ABORTED') throw e;
-          p.status = 'failed'; p.error = e.message; log('ultron', `"${p.trend.phrase}" failed: ${e.message}`, 'err');
-          renderPipeline(); persist();
-          if (fatal(e)) throw e;
-        }
+        if (await produceWithRetry(p, mode)) made.push(p); else parked++;
       }
       const live = made.filter((p) => p.status === 'published').length, rev = made.filter((p) => p.status === 'review').length;
-      const sum = `${made.length}/${items.length} designs made` + (live ? ` · ${live} live on Etsy` : '') + (rev ? ` · ${rev} waiting for your review` : '');
+      const sum = `${made.length}/${items.length} designs made` + (live ? ` · ${live} live on Etsy` : '') + (rev ? ` · ${rev} waiting for your review` : '') + (parked ? ` · ${parked} parked for a retry` : '');
       log('ultron', `Mission ${plan.codename} complete. ${sum}.`, 'ok');
       toast('Mission complete · ' + sum);
       notify(`Mission ${plan.codename} complete`, sum);
@@ -283,7 +317,7 @@ Reply with a JSON array of ${count} objects: {"phrase": "the words printed on th
   }
 
   async function forge(p) {
-    setAgent('forge', 'WORKING', `Drawing "${p.trend.phrase}"`);
+    cur.forge = p.id; setAgent('forge', 'WORKING', `Drawing "${p.trend.phrase}"`);
     p.stage = 'design'; renderPipeline();
     const tr = p.trend;
     const prompt = `You are FORGE, the design agent in a print-on-demand t-shirt studio. Create ONE original, high-quality t-shirt graphic as SVG.
@@ -301,7 +335,7 @@ Rules:
 - Keep it under 16KB.`;
     let svg, err;
     for (let i = 0; i < 2 && !svg; i++) {
-      try { svg = sanitizeSVG(await ask(prompt, { maxTokens: 9000 })); } catch (e) { err = e; if (fatal(e)) throw e; }
+      try { svg = sanitizeSVG(await ask(prompt, { maxTokens: 9000, agent: 'forge', task: `Drawing "${tr.phrase}"` })); } catch (e) { err = e; if (fatal(e)) throw e; }
     }
     if (!svg) throw err || new Error('Design failed');
     p.svg = svg; rollDay(); D.day.designs++; renderPipeline(); persist();
@@ -309,13 +343,47 @@ Rules:
     setAgent('forge', 'IDLE');
   }
 
+  // up to 3 attempts per design; each attempt resumes from the step that broke
+  async function produceWithRetry(p, mode, tries = 3) {
+    for (let i = 1; i <= tries; i++) {
+      try {
+        p.attempts = (p.attempts || 0) + 1;
+        await produce(p, mode);
+        delete p.retryable;
+        return true;
+      } catch (e) {
+        if (e.message === 'ABORTED' || fatal(e)) { parkProduct(p, e); throw e; }
+        if (i < tries) {
+          log('ultron', `"${p.trend.phrase}" hit a snag at ${p.lastStep || 'design'} (${e.message}). Retrying ${i + 1}/${tries}…`, 'err');
+          p.status = 'working'; renderPipeline();
+          await sleep(2000 * i); checkAbort();
+        } else { parkProduct(p, e); log('ultron', `"${p.trend.phrase}" still failing after ${tries} tries — parked. Autopilot will try again later.`, 'err'); }
+      }
+    }
+    return false;
+  }
+  function parkProduct(p, e) {
+    p.stage = '';
+    if (e.message === 'ABORTED') { p.status = 'failed'; p.error = 'Mission aborted'; }
+    else if (p.svg && p.listing) { p.status = 'review'; p.reviewReason = `Stopped at ${p.lastStep || 'a late step'}: ${e.message}`; p.retryable = true; }
+    else { p.status = 'failed'; p.error = e.message; p.retryable = !fatal(e); }
+    renderPipeline(); persist();
+  }
+  async function retryProduct(p) {
+    running = true; uiRunning(true); p.status = 'working'; delete p.reviewReason; delete p.error; renderPipeline();
+    try { await produceWithRetry(p, D.settings.mode, 2); }
+    catch (e) { toast(e.message, true); }
+    finally { running = false; uiRunning(false); for (const a of AGENTS) if (agentState[a.id]?.status === 'WORKING') setAgent(a.id, 'IDLE'); renderAll(); persist(); }
+  }
+
   async function produce(p, mode) {
     const tr = p.trend;
-    Station.packet('scout', 'forge', '#5ac8ff');
-    await forge(p); checkAbort();
+    if (!p.svg) { Station.packet('scout', 'forge', '#5ac8ff'); p.lastStep = 'the design'; await forge(p); checkAbort(); }
+    if (p.listing) { await finish(p, mode); return; }
+    p.lastStep = 'the listing';
 
     Station.packet('forge', 'scribe', '#ff8a5a');
-    setAgent('scribe', 'WORKING', `Writing "${tr.phrase}"`);
+    cur.scribe = p.id; setAgent('scribe', 'WORKING', `Writing "${tr.phrase}"`);
     p.stage = 'listing'; renderPipeline();
     const product = D.settings.blueprintTitle || 'Unisex cotton t-shirt';
     const L = await askJSON(`You are SCRIBE, an Etsy SEO copywriter. Write the listing for this print-on-demand ${product}.
@@ -324,7 +392,7 @@ Design phrase: "${tr.phrase}". Niche: ${tr.niche}. Buyer: ${tr.audience}. Style:
 Currency: ${D.settings.currency}. Template price guide: ${tpl().price}.
 Etsy rules: title max 140 characters, front-load the strongest search phrase, natural wording, no ALL CAPS words, no repeated words, at most one each of & and :, no other special characters. Exactly 13 tags, each 20 characters or fewer, lowercase, multi-word phrases buyers type.
 Description: in the brand voice, 120-200 words, then a short "Details" section with care and fit notes for a ${product}, then a gift line. Plain line breaks, no markdown symbols.
-Reply with JSON only: {"title": "...", "tags": ["13 tags"], "description": "...", "price": suggested retail price as a number}`, { maxTokens: 2000 });
+Reply with JSON only: {"title": "...", "tags": ["13 tags"], "description": "...", "price": suggested retail price as a number}`, { maxTokens: 2000, agent: 'scribe', task: `Writing the listing for "${tr.phrase}"` });
     checkAbort();
     p.listing = {
       title: String(L.title || tr.phrase).replace(/\s+/g, ' ').trim().slice(0, 140),
@@ -334,12 +402,18 @@ Reply with JSON only: {"title": "...", "tags": ["13 tags"], "description": "..."
     };
     log('scribe', `Listing: ${p.listing.title}`, 'ok');
     setAgent('scribe', 'IDLE'); renderPipeline(); persist();
+    await finish(p, mode);
+  }
 
+  async function finish(p, mode) {
+    const tr = p.trend;
     Station.packet('scribe', 'auditor', '#ffd36b');
+    p.lastStep = 'the QA check';
     await audit(p); checkAbort();
+    p.lastStep = 'pricing';
 
     Station.packet('auditor', 'ledger', '#ff6b8b');
-    setAgent('ledger', 'WORKING', 'Pricing');
+    cur.ledger = p.id; setAgent('ledger', 'WORKING', 'Pricing');
     price(p);
     log('ledger', `Price ${money(p.ledger.price)} · cost ${money(p.ledger.cost)} · fees ${money(p.ledger.fees)} · profit ${money(p.ledger.profit)} (${(p.ledger.margin * 100).toFixed(0)}%)`, 'ok');
     await sleep(300); setAgent('ledger', 'IDLE');
@@ -348,6 +422,7 @@ Reply with JSON only: {"title": "...", "tags": ["13 tags"], "description": "..."
     const risky = p.qa.trademark_risk === 'high' || p.qa.verdict === 'fail';
     const passes = p.qa.verdict === 'pass' && p.qa.trademark_risk === 'low' && p.qa.score >= D.settings.qaMin;
     const canSell = keys.printify && !pfReady();
+    p.lastStep = 'the Printify upload';
     if (mode === 'design' || !canSell) {
       p.status = risky ? 'review' : 'ready';
       if (risky) p.reviewReason = 'Auditor flagged it: ' + (p.qa.issues[0] || 'trademark risk');
@@ -358,6 +433,7 @@ Reply with JSON only: {"title": "...", "tags": ["13 tags"], "description": "..."
     } else {
       Station.packet('ledger', 'courier', '#b6ff5a');
       await push(p);
+      if (p.pushError) { const m = p.pushError; delete p.pushError; throw new Error('Printify said: ' + m); }
       if (p.status === 'uploaded') {
         if (mode === 'auto' && passes) await publish(p);
         else {
@@ -366,19 +442,28 @@ Reply with JSON only: {"title": "...", "tags": ["13 tags"], "description": "..."
         }
       }
     }
+    delete p.lastStep; if (p.status !== 'failed') delete p.error;
     renderAll(); persist();
   }
 
   async function audit(p) {
-    setAgent('auditor', 'WORKING', `Checking "${p.trend.phrase}"`);
+    cur.auditor = p.id; setAgent('auditor', 'WORKING', `Checking "${p.trend.phrase}"`);
     p.stage = 'qa'; renderPipeline();
-    const Q = await askJSON(`You are AUDITOR, the QA agent for an Etsy print-on-demand shop. Check this product before it goes live.
+    let Q;
+    const auditPrompt = `You are AUDITOR, the QA agent for an Etsy print-on-demand shop. Check this product before it goes live.
 Phrase: "${p.trend.phrase}"
 Text actually in the artwork: "${svgText(p.svg) || '(none found)'}"
 Title (${p.listing.title.length} chars): ${p.listing.title}
 Tags: ${p.listing.tags.map((t) => `${t} (${t.length})`).join(', ')}
 Check: trademarked words or phrases (brands, franchises, theme parks, celebrities, teams, song lyrics, trademarked slogans), spelling in the artwork versus the phrase, Etsy title rules, 13 tags each ≤20 chars, anything against Etsy policy. Also judge how sellable and appealing the concept is.
-Reply with JSON only: {"score": 0-100 overall quality, sellability and safety, "trademark_risk": "low"|"medium"|"high", "issues": ["short issue", ...], "verdict": "pass"|"fix"|"fail"}`, { fast: true, maxTokens: 800 });
+Reply with JSON only, issues kept under 12 words each, at most 5 issues: {"score": 0-100 overall quality, sellability and safety, "trademark_risk": "low"|"medium"|"high", "issues": ["short issue", ...], "verdict": "pass"|"fix"|"fail"}`;
+    try { Q = await askJSON(auditPrompt, { fast: true, maxTokens: 2000, agent: 'auditor', task: `Checking "${p.trend.phrase}"` }); }
+    catch (e) {
+      if (fatal(e)) throw e;
+      log('auditor', 'Fast check failed (' + e.message + ') — rechecking with the main model.', 'err');
+      try { Q = await askJSON(auditPrompt, { maxTokens: 2000, agent: 'auditor', task: `Rechecking "${p.trend.phrase}"` }); }
+      catch (e2) { if (fatal(e2)) throw e2; Q = { score: 0, trademark_risk: 'medium', issues: ['The auditor couldn’t check this one: ' + e2.message], verdict: 'fix' }; }
+    }
     p.qa = { score: Math.max(0, Math.min(100, Number(Q.score) || 0)), trademark_risk: ['low', 'medium', 'high'].includes(Q.trademark_risk) ? Q.trademark_risk : 'medium', issues: (Q.issues || []).map(String), verdict: ['pass', 'fix', 'fail'].includes(Q.verdict) ? Q.verdict : 'fix' };
     log('auditor', `"${p.trend.phrase}" scored ${p.qa.score} · trademark ${p.qa.trademark_risk} · ${p.qa.verdict.toUpperCase()}${p.qa.issues.length ? ' · ' + p.qa.issues.join('; ') : ''}`, p.qa.verdict === 'fail' ? 'err' : 'ok');
     setAgent('auditor', 'IDLE'); renderPipeline(); persist();
@@ -408,13 +493,16 @@ Reply with JSON only: {"score": 0-100 overall quality, sellability and safety, "
   async function push(p) {
     const why = pfReady(); if (why) { log('courier', why, 'err'); return; }
     if (p.printify.productId) return;
+    cur.courier = p.id; courierRun = { pid: p.id, steps: [['Render 4500×5400 print file', 'active'], ['Upload artwork to Printify', ''], ['Create product + variants', ''], ['Read real cost + mockups', '']] };
     setAgent('courier', 'WORKING', 'Uploading artwork');
     try {
       const vars = chosenVariants();
       if (!vars.length) throw new Error('None of your shirt colours exist for this product — change the colours in Settings');
       const b64 = await svgToPNG(p.svg);
+      cstep(0, 'done'); cstep(1, 'active');
       const slug = p.trend.phrase.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'design';
       const up = await pf('/v1/uploads/images.json', 'POST', { file_name: `${slug}.png`, contents: b64 });
+      cstep(1, 'done'); cstep(2, 'active');
       setAgent('courier', 'WORKING', 'Creating product');
       const cents = Math.round(p.listing.price * 100);
       const prod = await pf(`/v1/shops/${D.settings.shopId}/products.json`, 'POST', {
@@ -423,6 +511,7 @@ Reply with JSON only: {"score": 0-100 overall quality, sellability and safety, "
         variants: vars.map((v) => ({ id: v.id, price: cents, is_enabled: true })),
         print_areas: [{ variant_ids: vars.map((v) => v.id), placeholders: [{ position: 'front', images: [{ id: up.id, x: 0.5, y: 0.5, scale: 1, angle: 0 }] }] }],
       });
+      cstep(2, 'done'); cstep(3, 'active');
       p.printify = { ...p.printify, imageId: up.id, productId: prod.id, variantIds: vars.map((v) => v.id), mockups: (prod.images || []).map((i) => i.src).filter(Boolean).slice(0, 4) };
       const costs = (prod.variants || []).filter((v) => v.is_enabled && v.cost).map((v) => v.cost);
       if (costs.length) {
@@ -435,12 +524,13 @@ Reply with JSON only: {"score": 0-100 overall quality, sellability and safety, "
         }
         p.ledger = ledger(p.listing.price, p.printify.cost);
       }
-      p.status = 'uploaded';
+      p.status = 'uploaded'; cstep(3, 'done');
       log('courier', `"${p.trend.phrase}" is on Printify with ${vars.length} variants · real cost ${money(p.printify.cost)} · profit ${money(p.ledger.profit)}`, 'ok');
       setAgent('courier', 'IDLE');
     } catch (e) {
+      if (courierRun) { const i = courierRun.steps.findIndex((x) => x[1] === 'active'); if (i >= 0) cstep(i, 'fail'); }
       log('courier', 'Printify upload failed: ' + e.message, 'err');
-      p.reviewReason = 'Printify upload failed: ' + e.message; p.status = 'review';
+      p.reviewReason = 'Printify upload failed: ' + e.message; p.status = 'review'; p.pushError = e.message;
       setAgent('courier', 'IDLE', '', true);
     }
     renderPipeline(); renderReadouts(); persist();
@@ -449,14 +539,17 @@ Reply with JSON only: {"score": 0-100 overall quality, sellability and safety, "
     const why = pfReady(); if (why) { toast(why, true); return; }
     if (!p.printify.productId) await push(p);
     if (!p.printify.productId) return;
+    cur.courier = p.id;
+    if (!courierRun || courierRun.pid !== p.id) courierRun = { pid: p.id, steps: [] };
+    courierRun.steps.push(['Publish to Etsy', 'active']); feedTouch('courier');
     setAgent('courier', 'WORKING', 'Publishing to Etsy');
     try {
       await pf(`/v1/shops/${D.settings.shopId}/products/${p.printify.productId}/publish.json`, 'POST', { title: true, description: true, images: true, variants: true, tags: true, keyFeatures: true, shipping_template: true });
-      p.status = 'published'; p.printify.publishedAt = Date.now(); delete p.reviewReason;
+      p.status = 'published'; p.printify.publishedAt = Date.now(); delete p.reviewReason; cstep(courierRun.steps.length - 1, 'done');
       Station.launchShuttle();
       log('courier', `"${p.listing.title.slice(0, 60)}" sent to Etsy. It shows up in your shop within a few minutes.`, 'ok');
       setAgent('courier', 'IDLE');
-    } catch (e) { log('courier', 'Publish failed: ' + e.message, 'err'); toast(e.message, true); setAgent('courier', 'IDLE', '', true); }
+    } catch (e) { cstep(courierRun.steps.length - 1, 'fail'); log('courier', 'Publish failed: ' + e.message, 'err'); toast(e.message, true); setAgent('courier', 'IDLE', '', true); }
     renderAll(); persist();
   }
   async function pushEdits(p) {
@@ -606,7 +699,7 @@ Available actions (use only when the owner asks for them or clearly wants them):
 - {"type":"set","field":"mode"|"hours"|"acount"|"maxPerDay"|"qaMin"|"defaultBrief"|"colours","value":...}  mode is "auto","review" or "design"
 - {"type":"sync"} pull orders and sales now
 - {"type":"show","status":"review"|"published"|"ready"|"failed"|"all"} show those products in the terminal
-Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}`, { maxTokens: 1500 });
+Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}`, { maxTokens: 1500, agent: 'ultron', task: 'Answering you' });
       D.chat.push({ role: 'ultron', text: String(r.reply || 'Done.'), ts: Date.now() });
       renderChat();
       for (const a of r.actions || []) await doAction(a);
@@ -667,7 +760,7 @@ Write a reply to this customer message. Warm, short, specific and helpful. Use a
 Customer message:
 ${msg}
 Matching orders:
-${ctx || 'none found'}`, { maxTokens: 900 });
+${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a customer reply' });
       $('#cust-reply').value = t.trim();
     } catch (e) { $('#cust-reply').value = ''; toast(e.message, true); }
     $('#cust-draft').disabled = false;
@@ -699,6 +792,7 @@ ${ctx || 'none found'}`, { maxTokens: 900 });
       if (p.qa) pr.append(el('span', 'pill ' + (p.qa.verdict === 'pass' ? 'pass' : p.qa.verdict === 'fail' ? 'fail' : 'medium'), 'QA ' + p.qa.score));
       if (p.sales?.qty) pr.append(el('span', 'pill pass', p.sales.qty + ' SOLD'));
       m.append(pr, el('div', 'ph', p.listing?.title || p.trend?.phrase || '…'));
+      if (p.status === 'failed' && p.error) m.append(el('div', 'err-line', p.error));
       const n = el('div', 'nums'); n.append(el('span', '', p.listing ? money(p.listing.price) : '—'), el('span', 'p', p.ledger ? '+' + money(p.ledger.profit) : ''));
       m.append(n);
       if (p.status === 'review' && p.printify?.productId) { const a = btn('APPROVE', (e) => { e.stopPropagation(); publish(p); }, 'go mini'); m.append(a); }
@@ -819,6 +913,166 @@ ${ctx || 'none found'}`, { maxTokens: 900 });
   }
   function renderAll() { renderPipeline(); renderOrders(); renderStats(); renderReadouts(); renderCmd(); renderAuto(); renderNeeds(); }
 
+  // ---------- live agent feed (opens when you click an agent) ----------
+  let feedRaf = 0;
+  function feedTouch(a) { if (feedAgent && (a === feedAgent || feedAgent === 'ultron') && !feedRaf) feedRaf = requestAnimationFrame(() => { feedRaf = 0; renderFeed(false); }); }
+  function cstep(i, st) { if (courierRun?.steps[i]) { courierRun.steps[i][1] = st; feedTouch('courier'); } }
+  const unesc = (x) => { try { return JSON.parse('"' + x.replace(/\\$/, '') + '"'); } catch { return x.replace(/\\n/g, '\n').replace(/\\"/g, '"'); } };
+  const grab = (txt, key) => { const m = txt.match(new RegExp('"' + key + '"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)')); return m ? unesc(m[1]) : ''; };
+  function partialSVG(text) {
+    const i = text.indexOf('<svg'); if (i < 0) return null;
+    const tpl = document.createElement('template'); tpl.innerHTML = text.slice(i).replace(/```[\s\S]*$/, '');
+    const svg = tpl.content.querySelector('svg'); if (!svg) return null;
+    svg.querySelectorAll('script,foreignObject,image,iframe').forEach((n) => n.remove());
+    for (const n of [svg, ...svg.querySelectorAll('*')]) for (const at of [...n.attributes]) if (/^on/i.test(at.name) || (/href$/i.test(at.name) && !/^#/.test(at.value))) n.removeAttribute(at.name);
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    if (!svg.getAttribute('viewBox')) svg.setAttribute('viewBox', '0 0 900 1080');
+    return { url: svgURL(new XMLSerializer().serializeToString(svg)), shapes: svg.querySelectorAll('path,circle,ellipse,rect,polygon,line,polyline,text').length };
+  }
+  const prodFor = (a) => D.products.find((p) => p.id === cur[a]) || null;
+  function renderFeed(full) {
+    const box = $('#feed');
+    if (!feedAgent) { box.hidden = true; box.dataset.agent = ''; return; }
+    const a = AGENTS.find((x) => x.id === feedAgent), st = agentState[feedAgent] || {}, L = live[feedAgent];
+    if (full || box.dataset.agent !== feedAgent) {
+      box.dataset.agent = feedAgent; box.hidden = false; box.textContent = '';
+      box.style.setProperty('--agent', Station.ROOMS[feedAgent].color);
+      const head = el('div', 'feed-head');
+      head.append(el('span', 'led', ''), el('b', '', a.name), el('span', 'feed-role', a.role));
+      const x = el('button', 'wc close', '✕'); x.title = 'Back to the station'; x.onclick = () => selectAgent(null); head.append(x);
+      box.append(head, el('div', 'feed-now'), el('div', 'feed-widget'), el('div', 'lbl', 'LIVE OUTPUT'), el('pre', 'feed-term'), el('div', 'lbl', 'RECENT'), el('div', 'feed-recent'));
+    }
+    const working = st.status === 'WORKING';
+    box.querySelector('.feed-head .led').className = 'led ' + (st.err ? 'err' : working ? 'busy' : st.status === 'OFFLINE' ? '' : 'on');
+    box.querySelector('.feed-now').textContent = working ? '▶ ' + (st.text || L?.task || 'Working') : (st.status === 'OFFLINE' ? 'Offline — add your Claude key in Settings.' : 'Idle. ' + (L?.task ? 'Last job: ' + L.task : 'Waiting for orders from ULTRON.'));
+    const term = box.querySelector('.feed-term');
+    const txt = L?.text || '';
+    term.textContent = txt ? (txt.length > 2200 ? '…' + txt.slice(-2200) : txt) + (L?.busy ? '▌' : '') : (feedAgent === 'courier' || feedAgent === 'ledger' || feedAgent === 'analyst' ? 'This agent works with Printify and the numbers rather than writing text — see above.' : 'Nothing yet. Output streams here live while this agent works.');
+    term.classList.toggle('busy', !!L?.busy);
+    term.scrollTop = term.scrollHeight;
+    const rec = box.querySelector('.feed-recent'); rec.textContent = '';
+    for (const l of D.log.filter((x) => x.agent === feedAgent).slice(-5).reverse()) { const r = el('div', 'ln ' + l.kind); r.append(el('span', 't', stamp(l.ts) + ' '), el('span', 'm', l.msg)); rec.append(r); }
+    if (!rec.childNodes.length) rec.append(el('div', 'tiny dim', 'No activity yet.'));
+    const w = box.querySelector('.feed-widget');
+    (WIDGETS[feedAgent] || (() => {}))(w, L, working);
+  }
+  function kind(w, k) { if (w.dataset.kind !== k) { w.textContent = ''; w.dataset.kind = k; return true; } return false; }
+  const WIDGETS = {
+    forge(w, L) {
+      if (kind(w, 'forge')) { const art = el('div', 'feed-art'); art.append(el('img'), el('div', 'feed-art-wip', 'NO ARTWORK YET')); w.append(art, el('div', 'feed-meta')); }
+      const p = prodFor('forge'), img = w.querySelector('img'), wip = w.querySelector('.feed-art-wip'), meta = w.querySelector('.feed-meta');
+      w.querySelector('.feed-art').classList.toggle('dark', p?.tone === 'dark');
+      let url = null, info = '';
+      if (L?.busy) { const ps = partialSVG(L.text || ''); if (ps) { url = ps.url; info = `Drawing live · ${(L.text.length / 1024).toFixed(1)} KB written · ${ps.shapes} shapes`; } else info = 'Sketching…'; }
+      else if (p?.svg) { url = svgURL(p.svg); info = `Finished: "${p.trend.phrase}" · ${(p.svg.length / 1024).toFixed(1)} KB`; }
+      if (url && img.dataset.src !== url) { img.src = url; img.dataset.src = url; }
+      img.hidden = !url; wip.hidden = !!url; wip.textContent = L?.busy ? 'SKETCHING…' : 'NO ARTWORK YET';
+      meta.textContent = info || 'Forge turns each concept into print-ready artwork.';
+    },
+    scribe(w, L) {
+      if (kind(w, 'scribe')) {
+        const c = el('div', 'etsy'); c.append(el('div', 'etsy-img'), el('div', 'etsy-body'));
+        w.append(c);
+      }
+      const p = prodFor('scribe'); const t = L?.busy ? L.text : '';
+      const title = t ? grab(t, 'title') : p?.listing?.title || '';
+      const desc = t ? grab(t, 'description') : p?.listing?.description || '';
+      const tags = t ? (((t.match(/"tags"\s*:\s*\[([^\]]*)/) || [])[1] || '').match(/"((?:[^"\\]|\\.)*)"/g) || []).map((x) => unesc(x.slice(1, -1))) : p?.listing?.tags || [];
+      const pr = t ? Number((t.match(/"price"\s*:\s*([\d.]+)/) || [])[1]) : p?.listing?.price;
+      const im = w.querySelector('.etsy-img'); im.textContent = '';
+      if (p?.svg) { const i = new Image(); i.src = svgURL(p.svg); im.append(i); }
+      const b = w.querySelector('.etsy-body'); b.textContent = '';
+      b.append(el('div', 'etsy-shop', (D.settings.shopName || 'YOUR SHOP').toUpperCase() + ' · ETSY PREVIEW'));
+      b.append(el('div', 'etsy-title', (title || 'Writing the title…') + (L?.busy && !desc ? '▌' : '')));
+      if (pr) b.append(el('div', 'etsy-price', money(pr)));
+      const tg = el('div', 'etsy-tags'); for (const x of tags) tg.append(el('span', '', x)); b.append(tg);
+      if (desc) b.append(el('div', 'etsy-desc', desc + (L?.busy ? '▌' : '')));
+      if (!title && !L?.busy) { b.textContent = ''; b.append(el('div', 'tiny dim', 'Scribe writes the Etsy title, tags and description for each design. The next listing appears here as it’s written.')); }
+    },
+    scout(w, L) {
+      kind(w, 'scout'); w.textContent = '';
+      const radar = el('div', 'radar'); radar.append(el('i')); w.append(radar);
+      let items = [];
+      if (L?.busy) { const t = L.text || ''; const re = /"phrase"\s*:\s*"((?:[^"\\]|\\.)*)"[\s\S]*?(?:"audience"\s*:\s*"((?:[^"\\]|\\.)*)")?/g; let m; while ((m = re.exec(t))) items.push({ phrase: unesc(m[1]), audience: m[2] ? unesc(m[2]) : '' }); }
+      else items = lastTrends;
+      const g = el('div', 'concepts');
+      for (const c of items) { const k = el('div', 'concept'); k.append(el('b', '', '“' + c.phrase + '”'), el('span', '', c.audience || ''), el('i', '', c.why || '')); g.append(k); }
+      if (!items.length) g.append(el('div', 'tiny dim', L?.busy ? 'Scanning…' : 'Scout finds niches and phrases buyers search for. Concepts lock on here as they’re found.'));
+      w.append(g);
+    },
+    auditor(w, L, working) {
+      kind(w, 'auditor'); w.textContent = '';
+      const p = prodFor('auditor'); const q = !L?.busy && p?.qa;
+      const row = el('div', 'audit');
+      const dial = el('div', 'dial'); dial.style.setProperty('--v', q ? q.score : 0);
+      dial.append(el('b', '', q ? String(q.score) : '··'), el('span', '', 'QA'));
+      const list = el('div', 'checks');
+      const checks = ['Trademarks & brands', 'Artwork spelling', 'Title rules (≤140)', '13 tags ≤20 chars', 'Etsy policy'];
+      checks.forEach((c, i) => { const r = el('div', 'check ' + (L?.busy ? 'spin' : q ? (i === 0 && q.trademark_risk !== 'low' ? 'bad' : 'ok') : '')); r.style.animationDelay = (i * 0.15) + 's'; r.append(el('span', 'ic'), el('span', '', c)); list.append(r); });
+      row.append(dial, list); w.append(row);
+      if (q) { const iss = el('div', 'issues'); iss.append(el('span', 'pill ' + (q.trademark_risk === 'low' ? 'pass' : q.trademark_risk === 'high' ? 'fail' : 'medium'), 'TRADEMARK ' + q.trademark_risk.toUpperCase()), el('span', 'pill ' + (q.verdict === 'pass' ? 'pass' : q.verdict === 'fail' ? 'fail' : 'medium'), q.verdict.toUpperCase())); for (const i of q.issues) iss.append(el('div', '', '• ' + i)); w.append(iss); }
+      else if (!L?.busy) w.append(el('div', 'tiny dim', 'Auditor checks every design for trademark risk and Etsy rule problems before anything goes live.'));
+    },
+    ledger(w) {
+      kind(w, 'ledger'); w.textContent = '';
+      const p = prodFor('ledger') || [...D.products].reverse().find((x) => x.ledger);
+      if (!p?.ledger) { w.append(el('div', 'tiny dim', 'Ledger prices each design: real cost, Etsy fees and your margin. The breakdown shows here.')); return; }
+      const L = p.ledger; w.append(el('div', 'feed-meta', `"${p.trend.phrase}" · ${(L.margin * 100).toFixed(0)}% margin`));
+      const rows = [['Price', L.price, 'p'], ['Production', -L.cost, 'c'], ['Etsy listing', -L.listing, 'f'], ['Transaction 6.5%', -L.transaction, 'f'], ['Processing', -L.processing, 'f'], ['Profit', L.profit, 'g']];
+      const wf = el('div', 'waterfall'); let run = 0;
+      for (const [k, v, c] of rows) {
+        const r = el('div', 'wf ' + c); const bar = el('i');
+        const start = c === 'p' || c === 'g' ? 0 : run + v, width = Math.abs(v);
+        bar.style.left = (start / L.price * 100) + '%'; bar.style.width = Math.max(0.5, width / L.price * 100) + '%';
+        if (c === 'p') run = v; else if (c !== 'g') run += v;
+        const track = el('div', 'track'); track.append(bar);
+        r.append(el('span', '', k), track, el('b', '', money(v))); wf.append(r);
+      }
+      w.append(wf);
+    },
+    courier(w) {
+      kind(w, 'courier'); w.textContent = '';
+      const p = prodFor('courier');
+      if (courierRun) {
+        const steps = el('div', 'steps');
+        for (const [n, st] of courierRun.steps) { const r = el('div', 'step ' + st); r.append(el('span', 'ic'), el('span', '', n)); steps.append(r); }
+        w.append(el('div', 'feed-meta', p ? `"${p.trend.phrase}"` : ''), steps);
+      } else w.append(el('div', 'tiny dim', pfReady() ? 'Courier ships designs to Printify and Etsy. ' + pfReady() : 'Courier uploads each design to Printify, creates the product and publishes it to Etsy. Progress shows here.'));
+      if (p?.printify?.mockups?.length) { const m = el('div', 'mockups'); for (const src of p.printify.mockups) { const i = new Image(); i.src = src; i.onerror = () => i.remove(); m.append(i); } w.append(m); }
+      if (p?.printify?.url) w.append(btn('OPEN ON ETSY', () => kivo.openUrl(p.printify.url), 'mini'));
+    },
+    analyst(w) {
+      kind(w, 'analyst'); w.textContent = '';
+      const sales = D.orders.reduce((s, o) => s + o.sales, 0);
+      const tiles = el('div', 'tiles mini');
+      for (const [k, v] of [['SALES', D.orders.length ? money(sales) : '—'], ['ORDERS', D.orders.length || '—'], ['PROFIT', D.orders.length ? money(D.orders.reduce((s, o) => s + orderProfit(o), 0)) : '—']]) { const t = el('div', 'tile'); t.append(el('label', '', k), el('b', '', String(v))); tiles.append(t); }
+      w.append(tiles);
+      const best = D.products.filter((p) => p.sales?.qty).sort((a, b) => b.sales.qty - a.sales.qty).slice(0, 5), mx = best[0]?.sales.qty || 1;
+      const bars = el('div', 'hbars');
+      for (const p of best) { const r = el('div', 'hbar'); const i = el('i'); i.style.width = (p.sales.qty / mx * 100) + '%'; r.append(el('span', '', p.trend.phrase), i, el('b', '', p.sales.qty)); bars.append(r); }
+      if (!best.length) bars.append(el('div', 'tiny dim', keys.printify ? 'Best sellers appear here once orders come in.' : 'Connect Printify and Analyst reads your orders and learns what sells.'));
+      w.append(bars, el('div', 'feed-meta', D.lastSync ? 'Last sync ' + new Date(D.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Not synced yet'));
+    },
+    ultron(w) {
+      kind(w, 'ultron'); w.textContent = '';
+      if (lastPlan) {
+        const m = el('div', 'plan'); m.append(el('b', '', 'MISSION ' + String(lastPlan.codename || '').toUpperCase()), el('div', '', lastPlan.directive || ''));
+        const ang = el('div', 'etsy-tags'); for (const x of lastPlan.angles || []) ang.append(el('span', '', x)); m.append(ang); w.append(m);
+      } else w.append(el('div', 'tiny dim', 'ULTRON plans each mission and hands work to the crew. Talk to him in the CHAT tab.'));
+      const cal = el('div', 'cal'); cal.append(el('div', 'lbl', 'SELLING CALENDAR'));
+      for (const h of sellingCalendar().slice(0, 5)) { const r = el('div', 'cal-row'); r.append(el('span', '', h.name), el('span', 'dim', h.days + 'd'), el('span', 'pill ' + ({ PRIME: 'pass', 'LAST CHANCE': 'medium', 'TOO LATE': 'fail' }[h.status] || ''), h.status)); cal.append(r); }
+      w.append(cal);
+      const grid = el('div', 'crewgrid');
+      for (const a of AGENTS.filter((x) => x.id !== 'ultron')) {
+        const st = agentState[a.id] || {}; const c = el('button', 'crew ' + (st.status === 'WORKING' ? 'busy' : ''));
+        c.style.setProperty('--agent', Station.ROOMS[a.id].color);
+        c.append(el('span', 'led ' + (st.err ? 'err' : st.status === 'WORKING' ? 'busy' : st.status === 'OFFLINE' ? '' : 'on')), el('b', '', a.name), el('span', '', st.status === 'WORKING' ? st.text : 'idle'));
+        c.onclick = () => selectAgent(a.id); grid.append(c);
+      }
+      w.append(grid);
+    },
+  };
+
   // ---------- tabs ----------
   function showTab(t) {
     $$('.tab').forEach((x) => x.classList.toggle('on', x.dataset.tab === t));
@@ -861,6 +1115,7 @@ ${ctx || 'none found'}`, { maxTokens: 900 });
     } else qa.append(el('div', 'dim', p.error ? 'Error: ' + p.error : 'Not checked yet.'));
     const canSell = !pfReady() && p.svg && p.listing;
     $('#d-approve').hidden = !(canSell && ['review', 'ready', 'uploaded'].includes(p.status));
+    $('#d-retry').hidden = !(['review', 'failed'].includes(p.status) && (p.retryable || /stopped|Didn’t finish|couldn’t check/i.test((p.reviewReason || '') + (p.error || '') + (p.qa?.issues || []).join(' '))));
     $('#d-approve').textContent = p.status === 'retired' ? 'RELIST' : 'APPROVE & PUBLISH';
     $('#d-etsy').hidden = !p.printify?.url;
     $('#d-png').disabled = $('#d-svg').disabled = !p.svg;
@@ -956,6 +1211,8 @@ ${ctx || 'none found'}`, { maxTokens: 900 });
     if (!keys.anthropic || running) return;
     if (keys.printify && D.settings.shopId && Date.now() - D.lastSync > 60 * 60e3) await syncAll(true);
     if (!D.settings.auto) return;
+    const stuck = D.products.find((p) => p.retryable && ['review', 'failed'].includes(p.status) && (p.attempts || 0) < 6 && p.trend);
+    if (stuck) { log('ultron', `Retrying "${stuck.trend.phrase}" before starting new work.`); await retryProduct(stuck); return; }
     rollDay();
     if (D.day.designs >= D.settings.maxPerDay) return;
     if (Date.now() < nextRun()) return;
@@ -1115,7 +1372,7 @@ ${ctx || 'none found'}`, { maxTokens: 900 });
     $('#d-close').onclick = () => { $('#drawer').hidden = true; openId = null; };
     $('#o-close').onclick = () => ($('#odrawer').hidden = true);
     for (const o of ['#settings', '#drawer', '#odrawer']) $(o).addEventListener('mousedown', (e) => { if (e.target === $(o)) { $(o).hidden = true; openId = null; } });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { for (const o of ['#settings', '#drawer', '#odrawer']) $(o).hidden = true; openId = null; } });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const any = ['#settings', '#drawer', '#odrawer'].some((o) => !$(o).hidden); for (const o of ['#settings', '#drawer', '#odrawer']) $(o).hidden = true; openId = null; if (!any && feedAgent) selectAgent(null); } });
     $$('[data-url]').forEach((b) => (b.onclick = () => kivo.openUrl(b.dataset.url)));
 
     const cnt = $('#count');
@@ -1155,6 +1412,10 @@ ${ctx || 'none found'}`, { maxTokens: 900 });
     // drawer
     for (const s of ['#d-price', '#d-cost', '#d-ltitle']) $(s).addEventListener('input', updateDrawerCalc);
     $('#d-save').onclick = () => drawerSave();
+    $('#d-retry').onclick = async () => {
+      const p = D.products.find((x) => x.id === openId); if (!p || running) return;
+      $('#drawer').hidden = true; p.attempts = 0; await retryProduct(p);
+    };
     $('#d-approve').onclick = async () => { const p = await drawerSave(true); if (!p) return; $('#drawer').hidden = true; await publish(p); };
     $('#d-etsy').onclick = () => { const p = D.products.find((x) => x.id === openId); if (p?.printify?.url) kivo.openUrl(p.printify.url); };
     $('#d-redo').onclick = async () => {
@@ -1251,6 +1512,7 @@ ${ctx || 'none found'}`, { maxTokens: 900 });
       if (st.state === 'downloaded') { $('#btn-update').hidden = false; $('#btn-update').textContent = `UPDATE ${st.version} · RESTART`; notify('Kivo Ultron update ready', `Version ${st.version} installs when you restart.`); }
     });
     $('#btn-update').onclick = () => kivo.installUpdate?.();
+    kivo.onDelta?.(({ reqId, delta }) => { const a = reqAgent[reqId]; if (a && live[a]) { live[a].text += delta; feedTouch(a); } });
     kivo.onTray?.((c) => {
       if (c === 'run') $('#btn-run').click();
       if (c === 'toggleAuto') setAuto(!D.settings.auto);
@@ -1268,8 +1530,14 @@ ${ctx || 'none found'}`, { maxTokens: 900 });
     for (const p of D.products) {
       if (p.status === 'working') { p.status = 'failed'; p.error = 'App closed mid-mission'; }
       if (p.status === 'held') p.status = 'review';
+      if (p.status === 'failed' && p.svg && p.listing) { p.status = 'review'; p.reviewReason = 'Didn’t finish last time (' + (p.error || 'unknown error') + ')'; p.retryable = true; p.attempts = 0; }
+      else if (p.status === 'failed' && p.trend && p.error !== 'Mission aborted') { p.retryable = true; p.attempts = 0; }
       p.sales = p.sales || { qty: 0, revenue: 0 }; p.printify = p.printify || {};
     }
+    // migrate the old seasonal brief to the calendar-driven one
+    const seasonal = TEMPLATES.find((t) => t.id === 'seasonal');
+    if (/^Whatever holiday/.test(D.settings.defaultBrief || '')) D.settings.defaultBrief = seasonal.brief;
+    if (/^Whatever holiday/.test(D.ui.brief || '')) D.ui.brief = seasonal.brief;
     rollDay();
     keys = await kivo.keyStatus();
     prefs = await kivo.getPrefs();

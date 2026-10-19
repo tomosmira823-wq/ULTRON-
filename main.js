@@ -151,18 +151,50 @@ async function fetchRetry(url, opts, tries = 4) {
   throw last || new Error('Network error');
 }
 
-ipcMain.handle('claude:ask', async (_e, { prompt, model, maxTokens, key }) => {
+ipcMain.handle('claude:ask', async (e, { prompt, model, maxTokens, key, stream, reqId }) => {
   const k = key || readKeys().anthropic;
   if (!k) throw new Error('No Anthropic API key. Add it in Settings.');
   const res = await fetchRetry('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-api-key': k, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: model || 'claude-sonnet-5-5', max_tokens: maxTokens || 4000, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify({ model: model || 'claude-sonnet-5-5', max_tokens: maxTokens || 4000, stream: !!stream, messages: [{ role: 'user', content: prompt }] }),
   });
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((j.error && j.error.message) || `Claude API error ${res.status}`);
-  const text = (j.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('');
-  return { text, usage: j.usage || {}, stop: j.stop_reason };
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error((j.error && j.error.message) || `Claude API error ${res.status}`);
+  }
+  if (!stream) {
+    const j = await res.json().catch(() => ({}));
+    const text = (j.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('');
+    return { text, usage: j.usage || {}, stop: j.stop_reason };
+  }
+  // server-sent events: forward text as it arrives so the agent feed can show it live
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = '', text = '', stop = null, pending = '', lastSend = 0;
+  const usage = { input_tokens: 0, output_tokens: 0 };
+  const flush = (force) => {
+    if (!pending || (!force && Date.now() - lastSend < 60)) return;
+    if (!e.sender.isDestroyed()) e.sender.send('claude:delta', { reqId, delta: pending });
+    pending = ''; lastSend = Date.now();
+  };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n\n')) >= 0) {
+      const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+      const line = chunk.split('\n').find((l) => l.startsWith('data:'));
+      if (!line) continue;
+      let d; try { d = JSON.parse(line.slice(5).trim()); } catch { continue; }
+      if (d.type === 'message_start') usage.input_tokens = d.message?.usage?.input_tokens || 0;
+      else if (d.type === 'content_block_delta' && d.delta?.type === 'text_delta') { text += d.delta.text; pending += d.delta.text; flush(false); }
+      else if (d.type === 'message_delta') { usage.output_tokens = d.usage?.output_tokens || usage.output_tokens; stop = d.delta?.stop_reason || stop; }
+      else if (d.type === 'error') throw new Error(d.error?.message || 'Claude stream error');
+    }
+  }
+  flush(true);
+  return { text, usage, stop };
 });
 
 ipcMain.handle('printify:req', async (_e, { method, url, body, key }) => {

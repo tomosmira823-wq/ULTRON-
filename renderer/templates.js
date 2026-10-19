@@ -25,8 +25,8 @@ window.TEMPLATES = [
     tone: 'light', colours: 'White, Ivory, Natural, Sand, Light Blue', price: 23.99,
   },
   {
-    id: 'seasonal', name: 'Seasonal Autopilot', tagline: 'Always designs for the next holiday, 4–8 weeks ahead.',
-    brief: 'Whatever holiday or season is coming up in the next 4 to 8 weeks (Etsy buyers shop early): Halloween, Christmas, Valentine’s, Mother’s Day, Easter, summer, back to school, autumn. Pick the next one based on today’s date.',
+    id: 'seasonal', name: 'Seasonal Autopilot', tagline: 'Follows a live holiday calendar with order cut-off dates.',
+    brief: 'Seasonal and holiday gifts. Follow the selling calendar: design mostly for holidays marked PRIME, maybe one quick design for a LAST CHANCE holiday, and skip anything TOO LATE.',
     voice: 'Fun, festive and giftable, matched to the season.',
     tone: 'light', colours: 'White, Ivory, Natural, Black', price: 23.99,
   },

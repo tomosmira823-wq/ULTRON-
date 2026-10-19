@@ -20,5 +20,6 @@ contextBridge.exposeInMainWorld('kivo', {
   trayState: (st) => ipcRenderer.send('tray:state', st),
   onTray: (fn) => ipcRenderer.on('tray:cmd', (_e, c) => fn(c)),
   notify: (title, body) => ipcRenderer.send('notify', { title, body }),
+  onDelta: (fn) => ipcRenderer.on('claude:delta', (_e, v) => fn(v)),
   openUrl: (u) => ipcRenderer.send('open:url', u),
 });

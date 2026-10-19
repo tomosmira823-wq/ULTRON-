@@ -21,6 +21,10 @@
   const packets = [];
   let stars = [], t = 0, last = 0, selected = null, shuttle = { phase: 'docked', t: 0, x: 0 }, ship = null, view = { s: 1, ox: 0, oy: 0 };
   const ultron = { point: null, pointT: 0, talk: 0 };
+  // camera: world point at screen centre + zoom
+  const cam = { x: W / 2, y: H / 2, z: 1 }, camT = { x: W / 2, y: H / 2, z: 1 };
+  let focused = null;
+  const toCss = (wx, wy) => [view.ox + (W / 2 + (wx - cam.x) * cam.z) * view.s, view.oy + (H / 2 + (wy - cam.y) * cam.z) * view.s];
 
   const rnd = (a, b) => a + Math.random() * (b - a);
   function px(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); }
@@ -47,8 +51,9 @@
     }
     canvas.addEventListener('click', (e) => {
       const r = canvas.getBoundingClientRect();
-      const x = (e.clientX - r.left - view.ox) / view.s, y = (e.clientY - r.top - view.oy) / view.s;
+      const x = ((e.clientX - r.left - view.ox) / view.s - W / 2) / cam.z + cam.x, y = ((e.clientY - r.top - view.oy) / view.s - H / 2) / cam.z + cam.y;
       for (const [id, room] of Object.entries(ROOMS)) if (x >= room.x && x <= room.x + room.w && y >= room.y && y <= room.y + room.h) { onSelect(id); return; }
+      if (focused) onSelect(null);
     });
     new ResizeObserver(placeLabels).observe(canvas);
     placeLabels();
@@ -59,16 +64,28 @@
     const r = canvas.getBoundingClientRect();
     view.s = Math.min(r.width / W, r.height / H);
     view.ox = (r.width - W * view.s) / 2; view.oy = (r.height - H * view.s) / 2;
+    moveLabels();
+  }
+  function moveLabels() {
     for (const [id, room] of Object.entries(ROOMS)) {
-      const el = state[id].el;
-      el.style.left = (view.ox + (room.x + room.w / 2) * view.s) + 'px';
-      el.style.top = (view.oy + room.y * view.s - 2) + 'px';
+      const el = state[id].el, [lx, ly] = toCss(room.x + room.w / 2, room.y);
+      el.style.left = lx + 'px'; el.style.top = (ly - 2) + 'px';
+      el.classList.toggle('dim', !!focused && focused !== id);
+      el.classList.toggle('focus', focused === id);
     }
   }
   function placeBubble(id, x, y) {
-    const b = state[id].bubble;
-    b.style.left = (view.ox + x * view.s) + 'px';
-    b.style.top = (view.oy + y * view.s) + 'px';
+    const b = state[id].bubble, [bx, by] = toCss(x, y);
+    b.style.left = bx + 'px'; b.style.top = by + 'px';
+    b.classList.toggle('dim', !!focused && focused !== id);
+  }
+  // zoom the camera onto a room (null = whole station). panelFrac = share of the view covered by the feed panel on the right
+  function focus(id, panelFrac = 0.46) {
+    focused = ROOMS[id] ? id : null;
+    if (!focused) { Object.assign(camT, { x: W / 2, y: H / 2, z: 1 }); return; }
+    const r = ROOMS[focused];
+    const z = Math.min((W * (1 - panelFrac) * 0.86) / r.w, (H * 0.8) / r.h, 3.2);
+    Object.assign(camT, { z, x: r.x + r.w / 2 + (W * panelFrac / 2) / z, y: r.y + r.h / 2 + 6 / z });
   }
 
   function setBusy(id, busy, text, err) {
@@ -417,7 +434,11 @@
 
   function loop(ts) {
     const dt = Math.min(0.05, (ts - last) / 1000 || 0.016); last = ts; t += dt;
+    const k = Math.min(1, dt * 5);
+    cam.x += (camT.x - cam.x) * k; cam.y += (camT.y - cam.y) * k; cam.z += (camT.z - cam.z) * k;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     drawSpace(dt);
+    ctx.setTransform(cam.z, 0, 0, cam.z, W / 2 - cam.x * cam.z, H / 2 - cam.y * cam.z);
     for (const r of Object.values(ROOMS)) corridor(r.path);
     for (const [id, r] of Object.entries(ROOMS)) roomShell(id, r);
     for (const [id, r] of Object.entries(ROOMS)) props(id, r);
@@ -431,6 +452,14 @@
     }
     drawUltron(dt);
     drawPackets(dt);
+    if (focused) {
+      const r = ROOMS[focused];
+      ctx.save(); ctx.globalAlpha = Math.min(0.62, (cam.z - 1) * 0.6);
+      ctx.beginPath(); ctx.rect(-W, -H, W * 3, H * 3); ctx.rect(r.x - 12, r.y - 12, r.w + 24, r.h + 24);
+      ctx.fillStyle = '#000'; ctx.fill('evenodd'); ctx.restore();
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    moveLabels();
     requestAnimationFrame(loop);
   }
 
@@ -462,6 +491,6 @@
     return { init, setActive: (v) => { active = !!v; } };
   })();
 
-  window.Station = { init, setBusy, packet, highlight, launchShuttle, ROOMS };
+  window.Station = { init, setBusy, packet, highlight, launchShuttle, focus, ROOMS };
   window.Core = Core;
 })();
