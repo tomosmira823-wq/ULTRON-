@@ -31,6 +31,9 @@ It picks the blank tee and print provider for you, switches autopilot on and sta
 - **Orders**: live orders with tracking; on-hold orders are sent to print automatically.
 - **Stats**: sales, profit after Etsy fees, best sellers.
 - **Customers**: paste a customer message, get a reply drafted with their order details.
+- **Click any agent** to zoom into its room and watch its work live: Forge draws the artwork as it's written, Scribe types the Etsy listing, Scout's concepts lock on, Auditor runs its checks, Ledger shows the profit waterfall, Courier ticks through upload and publish, and ULTRON shows the mission plan and selling calendar.
+- Failed steps retry automatically (3 tries, resuming from where it broke), and autopilot retries anything parked.
+- A built-in selling calendar knows order cut-off dates, so seasonal designs target holidays that can still sell.
 - Autopilot learns from sales, makes variations of best sellers, retires listings with no sales, and keeps running in the tray (starts with Windows).
 
 ## Releasing an update
