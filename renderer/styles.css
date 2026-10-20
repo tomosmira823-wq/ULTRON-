@@ -632,3 +632,19 @@ body[data-dept="space"] .roster-foot { display: none; }
 .room-card:hover { border-color: color-mix(in srgb, var(--sp) 60%, transparent); }
 .room-card.on { border-color: var(--sp); box-shadow: 0 0 16px color-mix(in srgb, var(--sp) 30%, transparent); background: color-mix(in srgb, var(--sp) 7%, rgba(0,0,0,.3)); }
 .room-card.on b { color: var(--sp); }
+
+/* 2.4 · gui polish */
+.ro { flex: 0 0 auto; min-width: 0; padding: 4px 9px; }
+.ro label, .ro b { display: block; white-space: nowrap; }
+.ro b { font-size: 17px; }
+#roster .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 9px; letter-spacing: .1em; }
+#roster li { grid-template-columns: 10px minmax(0, 1fr) auto; }
+#roster .rl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#cp-brief { display: flex; flex-direction: column; }
+.cmd-recent-wrap { margin-top: 14px; flex: 1; display: flex; flex-direction: column; min-height: 90px; }
+.cmd-recent { flex: 1; min-height: 70px; max-height: 260px; overflow: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.cmd-recent .ln { font: 13px/1.25 var(--f-term); color: var(--ink); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+.cmd-recent .ln .t { color: var(--ink-dim); }
+.cmd-recent .ln .m { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmd-recent .ln b { color: var(--accent); font-weight: 400; }
+.cmd-recent .ln.ok .m { color: #d8e8df; } .cmd-recent .ln.err .m { color: var(--bad); }

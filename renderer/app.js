@@ -101,7 +101,23 @@
     if (D.log.length > 600) D.log.splice(0, D.log.length - 600);
     renderLog(); persist();
   }
+  // the "latest in this room" card under the briefing
+  function deptAgents(d) {
+    const sp = window.SP?.get(d);
+    if (sp) return { ids: new Set(sp.agents.map((a) => a.id)), chief: (m) => m.includes(sp.name) };
+    if (d === 'marketing') return { ids: new Set([...(window.Office?.AGENTS || []).map((a) => a.id)]), chief: (m) => /campaign|marketing|post/i.test(m) };
+    return { ids: new Set([...AGENTS.map((a) => a.id), ...(D.spaces?.hires?.store || []).map((a) => a.id)]), chief: (m) => !/campaign|marketing/i.test(m) && !(D.spaces?.list || []).some((s) => m.includes(s.name)) };
+  }
+  function renderRecent() {
+    const box = $('#cmd-recent'); if (!box) return;
+    const f = deptAgents(dept());
+    const lines = D.log.filter((l) => f.ids.has(l.agent) || (l.agent === 'ultron' && f.chief(l.msg))).slice(-8).reverse();
+    box.textContent = '';
+    for (const l of lines) { const r = el('div', 'ln ' + l.kind); const m = el('span', 'm'); m.append(el('b', '', nameOf(l.agent) + ' '), l.msg); m.title = l.msg; r.append(el('span', 't', stamp(l.ts).slice(0, 5)), m); box.append(r); }
+    if (!lines.length) box.append(el('div', 'tiny dim', 'Nothing yet. What the crew does shows up here.'));
+  }
   function renderLog() {
+    renderRecent();
     const box = $('#log'); const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
     box.textContent = '';
     for (const l of D.log.slice(-250)) {
@@ -1030,11 +1046,13 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     $('#ro-orders').textContent = D.orders.length || '—';
     $('#ro-live').textContent = D.products.filter((p) => p.status === 'published').length;
     rollDay(); $('#ro-today').textContent = `${D.day.designs}/${D.settings.maxPerDay}`;
-    $('#ro-agents').textContent = keys.anthropic ? `${AGENTS.length} ONLINE` : 'OFFLINE';
+    $('#ro-agents').textContent = keys.anthropic ? String(AGENTS.length + (D.spaces?.hires?.store || []).length) : 'OFF';
   }
   function renderCmd() {
-    $('#cmd-template').textContent = (D.settings.shopName || tpl().name);
-    $('#cmd-mode').textContent = MODES[D.settings.mode];
+    const d = dept();
+    if (window.SP?.get(d)) SP.renderCmd();
+    else if (d === 'marketing' && window.MK) { $('#cmd-k1').textContent = 'HANDLE'; $('#cmd-k2').textContent = 'MODE'; $('#cmd-template').textContent = MK.M().settings.handle || '—'; $('#cmd-mode').textContent = { auto: 'AUTO-POST', review: 'REVIEW FIRST', make: 'MAKE ONLY' }[MK.M().settings.mode]; }
+    else { $('#cmd-k1').textContent = 'SHOP'; $('#cmd-k2').textContent = 'MODE'; $('#cmd-template').textContent = (D.settings.shopName || tpl().name); $('#cmd-mode').textContent = MODES[D.settings.mode]; }
     $('#cmd-tokens').textContent = usd(D.day.usd || 0) + (D.settings.spendCap ? ' / $' + D.settings.spendCap : '');
     $('#cmd-state').textContent = running ? 'Mission in progress.' : !keys.anthropic ? 'Offline — run setup.' : D.settings.auto ? 'Autopilot engaged.' : 'Standing by.';
   }
@@ -1105,7 +1123,15 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
       box.append(r);
     }
   }
-  function renderAll() { renderPipeline(); renderOrders(); renderStats(); renderReadouts(); renderCmd(); renderAuto(); renderNeeds(); }
+  let relayoutDeck = () => {}, lastEmpty = null;
+  function termEmpty() {
+    const d = dept(), sp = window.SP?.get(d);
+    if (sp) return !sp.runs.length;
+    if (d === 'marketing') return !(D.mk?.posts || []).length && !(D.mk?.footage || []).length;
+    return !D.products.length;
+  }
+  function checkTerm() { const e = termEmpty(); if (e !== lastEmpty) { lastEmpty = e; relayoutDeck(); } }
+  function renderAll() { checkTerm(); renderPipeline(); renderOrders(); renderStats(); renderReadouts(); renderCmd(); renderAuto(); renderNeeds(); }
 
   // ---------- live agent feed (opens when you click an agent) ----------
   let feedRaf = 0;
@@ -1610,13 +1636,15 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
       const r1 = [L.roster && 'roster', 'station', L.cmd && 'commander'].filter(Boolean), r2 = [L.roster && 'terminal', 'terminal', L.cmd && 'commander'].filter(Boolean);
       const deck = $('.deck');
       deck.style.gridTemplateColumns = cols.join(' ');
-      deck.style.gridTemplateRows = L.term ? `minmax(0, 1fr) ${L.termH}px` : 'minmax(0, 1fr)';
+      const th = termEmpty() ? Math.min(L.termH, 170) : L.termH;
+      deck.style.gridTemplateRows = L.term ? `minmax(0, 1fr) ${th}px` : 'minmax(0, 1fr)';
       deck.style.gridTemplateAreas = L.term ? `"${r1.join(' ')}" "${r2.join(' ')}"` : `"${r1.join(' ')}"`;
       $$('.dk').forEach((b) => b.classList.toggle('on', !!L[b.dataset.panel]));
       const allClosed = !L.roster && !L.cmd && !L.term;
       $('#btn-expand').textContent = allClosed ? '⤡ SHRINK' : '⤢ EXPAND';
       requestAnimationFrame(() => Station.relayout());
     };
+    relayoutDeck = applyLayout;
     const setPanel = (k, on) => { const L = layout(); L[k] = on ?? !L[k]; persist(); applyLayout(); };
     $$('[data-panel]').forEach((b) => (b.onclick = () => setPanel(b.dataset.panel, b.classList.contains('pclose') ? false : undefined)));
     window.addEventListener('resize', applyLayout);
@@ -1812,12 +1840,10 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     $('#readouts').hidden = !st; $('#readouts-mk').hidden = !mk; $('#readouts-sp').hidden = !sp;
     $('#brief-store').hidden = !st; $('#brief-mk').hidden = !mk; $('#brief-sp').hidden = !sp;
     $('#term-store').hidden = !st; $('#term-mk').hidden = !mk; $('#term-sp').hidden = !sp;
-    if (!sp) {
-      $('#cmd-template').textContent = mk ? (MK.M().settings.handle || 'Marketing') : (D.settings.shopName || tpl().name);
-      $('#cmd-mode').textContent = mk ? { auto: 'AUTO-POST', review: 'REVIEW FIRST', make: 'MAKE ONLY' }[MK.M().settings.mode] : MODES[D.settings.mode];
-    }
     if (feedAgent) selectAgent(null);
     renderRoster(); if (sp) SP.renderAll(); else if (mk) MK.renderAll(); else renderAll();
+    renderCmd(); renderRecent(); checkTerm();
+    requestAnimationFrame(() => Core.setColor?.(getComputedStyle(document.body).getPropertyValue('--accent').trim()));
     SP.renderTabs();
     requestAnimationFrame(() => { Station.relayout(); Office.relayout(); });
   }
@@ -1865,7 +1891,7 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     get D() { return D; }, get keys() { return keys; }, get feedAgent() { return feedAgent; },
     ask, askJSON, log, persist, toast, notify, setAgent, agentState, live, money, usd, svgURL, svgToPNG, shopContext, calendarText,
     tpl, modelFor, setAgentModel, MODEL_CHOICES, modelName, costOf, stamp, fatal, cleanErr, feedTouch, selectAgent, renderReadouts, setDept, renderRoster,
-    storeSummary: () => stateSummary(), dept: () => dept(), busyElsewhere: () => running || !!window.MK?.running,
+    storeSummary: () => stateSummary(), checkTerm, renderRecent, dept: () => dept(), busyElsewhere: () => running || !!window.MK?.running,
     cancelAgents: (ids) => { const set = new Set(ids); const r = Object.entries(reqAgent).filter(([, a]) => set.has(a)).map(([k]) => Number(k)); if (r.length) kivo.cancelReq?.(r); },
   };
   boot();

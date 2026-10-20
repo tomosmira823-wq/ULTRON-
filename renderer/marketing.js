@@ -474,7 +474,7 @@ Reply with JSON only: {"segments": [{"start": 0, "end": 3.5, "text": "..."}], "h
   // ---------- UI ----------
   const STATUS = { drafting: ['DRAFTING', 'working'], rendering: ['RENDERING', 'working'], review: ['NEEDS REVIEW', 'medium'], ready: ['READY TO POST', 'ready'], scheduled: ['SCHEDULED', 'uploaded'], posting: ['POSTING', 'working'], posted: ['POSTED', 'published'], failed: ['FAILED', 'failed'] };
   let tab = 'content', openPost = null;
-  function renderAll() { renderTerminal(); renderControls(); renderNeedsInto(); renderReadouts(); K.feedTouch?.(K.feedAgent || ''); }
+  function renderAll() { K.checkTerm?.(); renderTerminal(); renderControls(); renderNeedsInto(); renderReadouts(); K.feedTouch?.(K.feedAgent || ''); }
   function renderReadouts() {
     const ps = M().posts, n = (st) => ps.filter((p) => p.status === st).length, sum = (k) => ps.reduce((a, p) => a + (p.metrics?.[k] || 0), 0);
     const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };

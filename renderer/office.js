@@ -72,6 +72,8 @@
     const CHIEF = { id: 'ultron', u: 4.0, v: 4.0, name: 'ULTRON', role: 'Chief of Staff' };
     const HUB = { u: 11.2, v: 10.8 };
     let room = null;      // a fixed, hand-made layout (rooms.js) instead of the generic slots
+    let hovered = null;   // agent under the mouse
+    const walkers = [];   // bots walking work over to the next desk
     let hubKind = null;   // room centrepiece style
     let canvas, ctx, onSelect = () => {}, t = 0, last = 0;
     const view = { s: 1 };
@@ -87,9 +89,7 @@
     ensure();
 
     function computeBounds() {
-      const pts = [iso(0, 0, WALL_H), iso(N, 0, WALL_H), iso(0, N, WALL_H), iso(N, N), iso(N, 0), iso(0, N)];
-      const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-      bounds = { x0: Math.min(...xs) - 30, x1: Math.max(...xs) + 30, y0: Math.min(...ys) - 40, y1: Math.max(...ys) + 30 };
+      bounds = { x0: iso(0, N)[0] - 18, x1: iso(N, 0)[0] + 18, y0: iso(0, 0, 6.3)[1] - 6, y1: iso(N, N)[1] + 14 };
       bounds.w = bounds.x1 - bounds.x0; bounds.h = bounds.y1 - bounds.y0;
       bounds.cx = (bounds.x0 + bounds.x1) / 2; bounds.cy = (bounds.y0 + bounds.y1) / 2;
     }
@@ -107,6 +107,8 @@
       }, { passive: false });
       let drag = null;
       canvas.addEventListener('mousedown', (e) => { drag = { x: e.clientX, y: e.clientY, moved: false }; });
+      canvas.addEventListener('mousemove', (e) => { if (drag?.moved) return; const [wx, wy] = screenToWorld(e); const h = hitAgent(wx, wy); if (h !== hovered) { hovered = h; canvas.style.cursor = h ? 'pointer' : ''; } });
+      canvas.addEventListener('mouseleave', () => { hovered = null; });
       window.addEventListener('mousemove', (e) => {
         if (!drag || !visible) return;
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
@@ -140,6 +142,11 @@
       if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
       view.s = Math.min(cw / bounds.w, ch / bounds.h);
     }
+    function hitAgent(wx, wy) {
+      for (const a of AGENTS) { const [x, y] = iso(a.u, a.v); if (Math.hypot(wx - x, (wy - (y - 18)) * 1.4) < 22) return a.id; }
+      const [cx, cy] = iso(CHIEF.u, CHIEF.v, 1.4); if (Math.hypot(wx - cx, wy - (cy - 16)) < 34) return 'ultron';
+      return null;
+    }
     function hitTest(wx, wy) {
       for (const a of AGENTS) { const [x, y] = iso(a.u, a.v); if (Math.hypot(wx - x, (wy - (y - 18)) * 1.4) < 26) return a.id; }
       const [cx, cy] = iso(CHIEF.u, CHIEF.v, 1.4); if (Math.hypot(wx - cx, wy - (cy - 16)) < 40) return 'ultron';
@@ -159,6 +166,7 @@
     function packet(from, to, color) {
       const a = find(from), b = find(to);
       if (!a || !b) return;
+      if (from !== 'ultron' && to !== 'ultron' && from !== to && st[from]) { walk(a, b); return; }
       const mid = room && !room.hub ? [(a.u + b.u) / 2 + 0.6, (a.v + b.v) / 2 + 0.6] : [HUB.u, HUB.v];
       packets.push({ pts: [iso(a.u, a.v, 0.2), iso(mid[0], mid[1], 0.2), iso(b.u, b.v, 0.2)], i: 0, p: 0, c: color || T.neon2 });
     }
@@ -227,6 +235,42 @@
       ensure(); recalcZones();
       return { placed: i, capacity: EXTRA.reduce((n, z) => n + deskSlots(z).length, 0) };
     }
+    // the sender gets up, carries the work to the next desk, drops it and walks back
+    function walk(a, b) {
+      for (let i = walkers.length - 1; i >= 0; i--) if (walkers[i].id === a.id) walkers.splice(i, 1);
+      const aisle = (x) => [x.u + 0.2, x.v + 1.15];
+      const out = [[a.u, a.v - 0.1], aisle(a), [aisle(b)[0], aisle(a)[1]], aisle(b), [b.u + 0.75, b.v + 0.95]];
+      walkers.push({ id: a.id, to: b.id, pts: out, back: [...out].reverse(), i: 0, p: 0, phase: 'out', drop: 0 });
+      st[a.id].away = true;
+    }
+    function stepWalkers(dt) {
+      for (let k = walkers.length - 1; k >= 0; k--) {
+        const w = walkers[k], path = w.phase === 'out' ? w.pts : w.back;
+        if (w.phase === 'drop') { w.drop += dt; if (w.drop > 0.6) { w.phase = 'back'; w.i = 0; w.p = 0; } continue; }
+        const A = path[w.i], B = path[w.i + 1];
+        if (!B) { if (w.phase === 'out') { w.phase = 'drop'; w.drop = 0; } else { walkers.splice(k, 1); if (st[w.id]) st[w.id].away = false; } continue; }
+        const len = Math.hypot(B[0] - A[0], B[1] - A[1]) || 0.01; w.p += (dt * 4.2) / len;
+        if (w.p >= 1) { w.p = 0; w.i++; }
+      }
+    }
+    function walkerPos(w) {
+      const path = w.phase === 'back' ? w.back : w.pts;
+      if (w.phase === 'drop') return path[path.length - 1];
+      const A = path[w.i], B = path[w.i + 1] || A;
+      return [A[0] + (B[0] - A[0]) * w.p, A[1] + (B[1] - A[1]) * w.p];
+    }
+    function drawWalker(w) {
+      const [u, v] = walkerPos(w), [x, y] = iso(u, v, 0.05), moving = w.phase !== 'drop';
+      const step = moving ? Math.sin(t * 14) : 0;
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(x, y + 1, 7, 2.6, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = '#2a2d33'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(x - 2.5, y - 8); ctx.lineTo(x - 2.5 + step * 2, y); ctx.moveTo(x + 2.5, y - 8); ctx.lineTo(x + 2.5 - step * 2, y); ctx.stroke();
+      robot(x, y - 7, 0.72, false, false, 0);
+      if (w.phase === 'out' || w.phase === 'drop') {
+        const fy = y - 30 - (w.phase === 'drop' ? w.drop * 16 : 0); ctx.globalAlpha = w.phase === 'drop' ? Math.max(0, 1 - w.drop / 0.6) : 1;
+        ctx.fillStyle = '#f4f2ea'; ctx.fillRect(x + 6, fy, 8, 10); ctx.fillStyle = T.neon; ctx.fillRect(x + 7.5, fy + 2.5, 5, 1); ctx.fillRect(x + 7.5, fy + 5, 4, 1);
+        ctx.globalAlpha = 1;
+      }
+    }
     function setMedia(list) { media = list || []; }
     function setHeaders(l, r) { headL = l; headR = r; }
     function show(on) { visible = !!on; if (on) requestAnimationFrame(fit); }
@@ -262,7 +306,7 @@
       const [x, y] = iso(u, v);
       ctx.save(); ctx.translate(x, y);
       if (axis === 'u') ctx.transform(1, 0.5, 0, 1, 0, 0); else ctx.transform(1, -0.5, 0, 1, 0, 0);
-      ctx.font = `600 ${size}px Michroma, sans-serif`; ctx.fillStyle = T.a2(0.75); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `600 ${room ? Math.min(size, 9) : size}px Michroma, sans-serif`; ctx.fillStyle = T.a2(room ? 0.42 : 0.75); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.letterSpacing = '3px'; ctx.fillText(text, 0, 0); ctx.letterSpacing = '0px';
       ctx.restore(); ctx.textAlign = 'left';
     }
@@ -339,8 +383,8 @@
         ctx.strokeStyle = T.neon; ctx.lineWidth = 2; ctx.shadowColor = T.neon; ctx.shadowBlur = 14; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.shadowBlur = 0;
       }
       if (room?.walls) room.walls(API); else drawWallDecor();
-      wallText(String(headL).toUpperCase(), 'left', 1.2, WALL_H - 0.55);
-      wallText(String(headR).toUpperCase(), 'right', 1.2, WALL_H - 0.55);
+      wallText(String(headL).toUpperCase(), 'left', 2.6, WALL_H - 0.55);
+      wallText(String(headR).toUpperCase(), 'right', 2.6, WALL_H - 0.55);
       const per = 9, cw = 1.9, gap = 0.55, ch = 3.2;
       let k = 0;
       for (const wall of ['left', 'right']) {
@@ -542,9 +586,17 @@
       else if (style === 'lab') { const [mx, my] = iso(a.u + 0.4, a.v + 0.4, 0.56); ctx.strokeStyle = T.a2(0.8); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(mx - 2, my - 9); ctx.lineTo(mx - 2, my - 5); ctx.lineTo(mx - 5, my); ctx.lineTo(mx + 5, my); ctx.lineTo(mx + 2, my - 5); ctx.lineTo(mx + 2, my - 9); ctx.stroke(); ctx.fillStyle = busy ? OK : T.a(0.6); ctx.fillRect(mx - 4, my - 3, 8, 3); if (busy) { ctx.fillStyle = OK; ctx.beginPath(); ctx.arc(mx, my - 11 - ((t * 8) % 6), 1.2, 0, 7); ctx.fill(); } }
       else if (style === 'workshop') { const [mx, my] = iso(a.u + 0.35, a.v + 0.45, 0.56); ctx.fillStyle = busy ? '#ffc247' : '#776'; ctx.fillRect(mx - 5, my - 5, 10, 4); ctx.fillStyle = '#f2efe8'; ctx.fillRect(mx - 3, my - 9, 6, 4); }
       }
-      robot(rx, ry, 0.85, busy, s.err, s.bob);
+      if (!s.away) robot(rx, ry, 0.85, busy, s.err, s.bob);
       if (room) deskGear(a.kind, a.u, a.v, busy);
       if (room && a.kind === 'headset') { ctx.strokeStyle = '#222'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(rx, ry - 24, 9, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke(); ctx.fillStyle = busy ? OK : '#333'; ctx.beginPath(); ctx.arc(rx - 8.5, ry - 22, 2.2, 0, 7); ctx.fill(); }
+      const showScreen = !room || busy || hovered === a.id || focused === a.id || (focused && find(focused)?.zone === a.zone);
+      if (!showScreen) {
+        const [nx, ny] = iso(a.u + 0.15, a.v + 1.0, 0);
+        ctx.font = '600 8px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const w = ctx.measureText(a.name).width + 8; ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.beginPath(); ctx.roundRect(nx - w / 2, ny - 6, w, 12, 3); ctx.fill();
+        ctx.fillStyle = s.err ? BAD : T.a2(0.8); ctx.fillText(a.name, nx, ny + 0.3); ctx.textAlign = 'left';
+        return;
+      }
       const [px, py] = iso(a.u, a.v, 2.6);
       const [qx, qy] = iso(a.u, a.v - 0.1, 1.4);
       ctx.strokeStyle = T.a(0.5); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(qx + 14, qy); ctx.lineTo(px + 14, py); ctx.stroke();
@@ -577,7 +629,9 @@
         const lead = AGENTS.filter((a) => a.zone === z.id);
         if (!lead.length) continue;
         const busyA = lead.find((a) => st[a.id].busy);
-        const show = busyA || lead[0];
+        const hov = lead.find((a) => a.id === hovered);
+        if (room && !busyA && !hov && !lead.some((a) => st[a.id].err)) continue;
+        const show = busyA || hov || lead[0];
         const [x, y] = iso((z.u[0] + z.u[1]) / 2, (z.v[0] + z.v[1]) / 2, 4.3);
         chip(x, y, show.name, busyA ? (st[busyA.id].text || 'Working') : 'Ready', !!busyA, lead.some((a) => st[a.id].err));
       }
@@ -696,7 +750,8 @@
       if (room?.floorProps) room.floorProps(API);
       drawZones();
       if (!room || room.hub) { if (!room) drawLinks(); drawHub(); }
-      const items = [...AGENTS.map((a) => ({ d: a.u + a.v, f: () => drawAgent(a) })), { d: CHIEF.u + CHIEF.v, f: drawChief }];
+      stepWalkers(dt || 0);
+      const items = [...AGENTS.map((a) => ({ d: a.u + a.v, f: () => drawAgent(a) })), { d: CHIEF.u + CHIEF.v, f: drawChief }, ...walkers.map((w) => { const [u, v] = walkerPos(w); return { d: u + v + 0.3, f: () => drawWalker(w) }; })];
       if (room) {
         for (const pr of room.props || []) items.push({ d: pr.d ?? pr.u + pr.v, f: () => pr.draw(API, pr) });
         for (const sp of room.spare || []) if (!AGENTS.some((a) => a.u === sp.u && a.v === sp.v)) items.push({ d: sp.u + sp.v, f: () => emptyDesk(sp) });
@@ -750,6 +805,7 @@
       highlight: () => {},
       get AGENTS() { return AGENTS; }, get style() { return style; }, get ZONES() { return ZONES; }, get BASE_AGENTS() { return BASE.agents; },
       get busy() { return st.ultron.busy || AGENTS.some((a) => st[a.id]?.busy); },
+      get walking() { return walkers.length; },
     };
   }
 

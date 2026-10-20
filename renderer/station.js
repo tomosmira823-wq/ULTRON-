@@ -607,7 +607,7 @@
 
   // ---------- commander core (wireframe sphere in the side panel) ----------
   const Core = (() => {
-    let c, x, active = false, tt = 0; const pts = [];
+    let c, x, active = false, tt = 0, col = '#46ff9a'; const pts = [];
     function init(cv) {
       c = cv; x = cv.getContext('2d');
       const N = 160, g = Math.PI * (3 - Math.sqrt(5));
@@ -622,15 +622,15 @@
       x.lineWidth = 1;
       for (let i = 0; i < rot.length; i++) for (let j = i + 1; j < rot.length; j++) {
         const p = rot[i], q = rot[j], d = (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
-        if (d < 0.07) { const z = (p[2] + q[2]) / 2; x.strokeStyle = `rgba(70,255,154,${0.12 + (z + 1) * 0.25})`; x.beginPath(); x.moveTo(w / 2 + p[0] * R, h / 2 + p[1] * R); x.lineTo(w / 2 + q[0] * R, h / 2 + q[1] * R); x.stroke(); }
+        if (d < 0.07) { const z = (p[2] + q[2]) / 2; x.strokeStyle = col; x.globalAlpha = 0.12 + (z + 1) * 0.25; x.beginPath(); x.moveTo(w / 2 + p[0] * R, h / 2 + p[1] * R); x.lineTo(w / 2 + q[0] * R, h / 2 + q[1] * R); x.stroke(); x.globalAlpha = 1; }
       }
       const pulse = active ? 0.6 + 0.4 * Math.sin(tt * 12) : 0.5;
       const gr = x.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, R * 0.6);
-      gr.addColorStop(0, `rgba(180,255,215,${pulse})`); gr.addColorStop(1, 'rgba(70,255,154,0)');
-      x.fillStyle = gr; x.beginPath(); x.arc(w / 2, h / 2, R * 0.6, 0, 7); x.fill();
+      gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)'); x.globalAlpha = pulse * 0.8;
+      x.fillStyle = gr; x.beginPath(); x.arc(w / 2, h / 2, R * 0.6, 0, 7); x.fill(); x.globalAlpha = 1;
       requestAnimationFrame(draw);
     }
-    return { init, setActive: (v) => { active = !!v; } };
+    return { init, setActive: (v) => { active = !!v; }, setColor: (v) => { if (v) col = v; } };
   })();
 
   window.Station = { init, setBusy, packet, highlight, launchShuttle, focus, ROOMS, setHires, HIRE_CAP: 6, relayout: () => { placeLabels(); if (!focused) Object.assign(camT, { x: W / 2, y: H / 2, z: 1 }); } };

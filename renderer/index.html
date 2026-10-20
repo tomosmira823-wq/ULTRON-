@@ -29,11 +29,11 @@
       <div class="ro"><label>CREW</label><b id="ro-agents">—</b></div>
     </div>
     <div class="readouts" id="readouts-mk" hidden>
-      <div class="ro"><label>SCHEDULED</label><b id="mk-ro-sched">0</b></div>
+      <div class="ro"><label>QUEUED</label><b id="mk-ro-sched">0</b></div>
       <div class="ro"><label>POSTED</label><b id="mk-ro-posted">0</b></div>
       <div class="ro"><label>VIEWS</label><b id="mk-ro-views">0</b></div>
       <div class="ro"><label>LIKES</label><b id="mk-ro-likes">0</b></div>
-      <div class="ro"><label>TO REVIEW</label><b id="mk-ro-review">0</b></div>
+      <div class="ro"><label>REVIEW</label><b id="mk-ro-review">0</b></div>
     </div>
     <div class="readouts" id="readouts-sp" hidden>
       <div class="ro"><label>JOBS</label><b id="sp-ro-runs">0</b></div>
@@ -90,8 +90,8 @@
         <div class="cmd-id">
           <h2 class="engr">ULTRON</h2>
           <div class="tiny" id="cmd-state">Standing by.</div>
-          <div class="kv"><span>SHOP</span><b id="cmd-template">—</b></div>
-          <div class="kv"><span>MODE</span><b id="cmd-mode">—</b></div>
+          <div class="kv"><span id="cmd-k1">SHOP</span><b id="cmd-template">—</b></div>
+          <div class="kv"><span id="cmd-k2">MODE</span><b id="cmd-mode">—</b></div>
           <div class="kv"><span>AI COST TODAY</span><b id="cmd-tokens">0</b></div>
         </div>
       </div>
@@ -185,6 +185,7 @@
         </label>
         <div class="row sp-every"><label class="lbl" for="sp-hours">RUN EVERY (HOURS)</label><input id="sp-hours" type="number" min="1" value="24"></div>
        </div>
+        <div class="cmd-recent-wrap"><div class="lbl">LATEST IN THIS ROOM</div><div class="glass cmd-recent" id="cmd-recent"></div></div>
       </div>
 
       <div class="cpane" id="cp-chat" hidden>

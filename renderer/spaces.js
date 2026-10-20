@@ -486,6 +486,12 @@ Give short, specific, useful notes the owner and the rest of the crew can act on
   let raf = 0;
 
   // ---------- UI: commander pane, readouts, terminal ----------
+  function renderCmd() {
+    const sp = get(current); if (!sp) return;
+    const r = runs.get(sp.id);
+    $('#cmd-k1').textContent = 'JOBS DONE'; $('#cmd-template').textContent = String(sp.runs.filter((x) => x.status === 'done').length);
+    $('#cmd-k2').textContent = 'STATUS'; $('#cmd-mode').textContent = r ? (r.run.status === 'waiting' ? 'NEEDS YOU' : 'WORKING') : sp.auto.on ? `AUTO · ${sp.auto.hours}H` : 'READY';
+  }
   let tab = 'outputs', openRun = null;
   function renderAll() {
     renderTabs();
@@ -507,7 +513,8 @@ Give short, specific, useful notes the owner and the rest of the crew can act on
     $('#sp-auto-desc').textContent = sp.auto.on ? `On · runs the brief every ${sp.auto.hours}h` : 'Off';
     renderNeeds(sp, waitingSteps);
     renderTerminal(sp, waitingSteps);
-    if (K.dept() === sp.id) { $('#cmd-template').textContent = sp.name; $('#cmd-mode').textContent = `${sp.agents.length} BOTS`; }
+    if (K.dept() === sp.id) renderCmd();
+    K.checkTerm?.();
   }
   function renderNeeds(sp, waitingSteps) {
     const box = $('#sp-needs'); box.textContent = '';
@@ -972,7 +979,7 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
   }
 
   window.SP = {
-    init, get, kindOf, findAgent, nameOf, show, hideCustom, focus, setBusy, renderAll, renderTabs, renderRoster, rosterHires, renderFeed,
+    init, renderCmd, get, kindOf, findAgent, nameOf, show, hideCustom, focus, setBusy, renderAll, renderTabs, renderRoster, rosterHires, renderFeed,
     openHire, openBuilder, exportHires, importFile, runSpace, stopSpace, afterRun, crewNotes, summary, chatAction, syncFloors, md,
     isRunning, get anyRunning() { return runs.size > 0; }, get list() { return S().list; }, TEMPLATES, CAP, addRoom, capOf,
   };
