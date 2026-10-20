@@ -30,10 +30,10 @@
   function px(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); }
 
   function init(cv, lbl, cb) {
-    canvas = cv; canvas.width = W; canvas.height = H;
+    canvas = cv;
     ctx = cv.getContext('2d'); labelsEl = lbl; onSelect = cb || onSelect;
     ctx.imageSmoothingEnabled = false;
-    for (let i = 0; i < 320; i++) stars.push({ x: rnd(0, W), y: rnd(0, H), s: Math.random() < 0.1 ? 2 : 1, p: rnd(0, 6.28), v: rnd(1, 5) });
+    for (let i = 0; i < 420; i++) stars.push({ x: Math.random(), y: Math.random(), s: Math.random() < 0.1 ? 2 : 1, p: rnd(0, 6.28), v: rnd(1, 5) });
     for (const [id, r] of Object.entries(ROOMS)) {
       const s = state[id] = { busy: false, err: false, text: '', crew: [] };
       if (id !== 'ultron') {
@@ -82,10 +82,13 @@
     requestAnimationFrame(loop);
   }
 
+  // the canvas always matches its box, so space fills the whole panel and the station is fitted inside it
   function placeLabels() {
     const r = canvas.getBoundingClientRect();
-    view.s = Math.min(r.width / W, r.height / H);
-    view.ox = (r.width - W * view.s) / 2; view.oy = (r.height - H * view.s) / 2;
+    const cw = Math.max(1, Math.round(r.width)), ch = Math.max(1, Math.round(r.height));
+    if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; ctx.imageSmoothingEnabled = false; }
+    view.s = Math.min(cw / W, ch / (H + 16));
+    view.ox = (cw - W * view.s) / 2; view.oy = (ch - H * view.s) / 2;
     moveLabels();
   }
   function moveLabels() {
@@ -134,21 +137,23 @@
 
   // ---------- space ----------
   function drawSpace(dt) {
-    px(0, 0, W, H, '#020403');
-    for (const s of stars) {
-      s.x -= s.v * dt * 0.6; if (s.x < 0) { s.x = W; s.y = rnd(0, H); }
-      ctx.globalAlpha = 0.35 + 0.65 * Math.abs(Math.sin(t * 0.8 + s.p));
-      px(s.x, s.y, s.s, s.s, s.s > 1 ? '#bfffe0' : '#6f8f80');
+    const CW = canvas.width, CH = canvas.height, k = Math.max(0.6, view.s);
+    px(0, 0, CW, CH, '#020403');
+    for (const st of stars) {
+      st.x -= st.v * dt * 0.6 / CW; if (st.x < 0) { st.x = 1; st.y = Math.random(); }
+      ctx.globalAlpha = 0.35 + 0.65 * Math.abs(Math.sin(t * 0.8 + st.p));
+      px(st.x * CW, st.y * CH, st.s * Math.max(1, k * 0.8), st.s * Math.max(1, k * 0.8), st.s > 1 ? '#bfffe0' : '#6f8f80');
     }
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#0d2a1b'; ctx.beginPath(); ctx.arc(925, 530, 90, 0, 7); ctx.fill();
-    ctx.fillStyle = '#123a25'; ctx.beginPath(); ctx.arc(905, 515, 70, 0, 7); ctx.fill();
-    for (let i = 0; i < 7; i++) px(845 + i * 16, 478 + (i % 3) * 12, 11, 3, '#1b5236');
-    if (!ship && Math.random() < dt * 0.05) ship = { x: -30, y: rnd(165, 205), v: rnd(40, 80) };
+    const plx = CW - 35 * k, ply = CH - 10 * k;
+    ctx.fillStyle = '#0d2a1b'; ctx.beginPath(); ctx.arc(plx, ply, 90 * k, 0, 7); ctx.fill();
+    ctx.fillStyle = '#123a25'; ctx.beginPath(); ctx.arc(plx - 20 * k, ply - 15 * k, 70 * k, 0, 7); ctx.fill();
+    for (let i = 0; i < 7; i++) px(plx - 80 * k + i * 16 * k, ply - 52 * k + (i % 3) * 12 * k, 11 * k, 3 * k, '#1b5236');
+    if (!ship && Math.random() < dt * 0.05) ship = { x: -30, y: rnd(0.3, 0.38), v: rnd(40, 80) };
     if (ship) {
-      ship.x += ship.v * dt;
-      px(ship.x, ship.y, 15, 4, '#6d7a74'); px(ship.x + 15, ship.y + 1, 4, 2, '#9fb'); px(ship.x - 5, ship.y + 1, 5, 2, C.warn);
-      if (ship.x > W + 30) ship = null;
+      ship.x += ship.v * dt * k; const sy = ship.y * CH;
+      px(ship.x, sy, 15 * k, 4 * k, '#6d7a74'); px(ship.x + 15 * k, sy + k, 4 * k, 2 * k, '#9fb'); px(ship.x - 5 * k, sy + k, 5 * k, 2 * k, C.warn);
+      if (ship.x > CW + 30) ship = null;
     }
   }
 
@@ -532,7 +537,8 @@
     cam.x += (camT.x - cam.x) * k; cam.y += (camT.y - cam.y) * k; cam.z += (camT.z - cam.z) * k;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     drawSpace(dt);
-    ctx.setTransform(cam.z, 0, 0, cam.z, W / 2 - cam.x * cam.z, H / 2 - cam.y * cam.z);
+    const kz = view.s * cam.z;
+    ctx.setTransform(kz, 0, 0, kz, view.ox + (W / 2 - cam.x * cam.z) * view.s, view.oy + (H / 2 - cam.y * cam.z) * view.s);
     for (const r of Object.values(ROOMS)) corridor(r.path);
     for (const [id, r] of Object.entries(ROOMS)) roomShell(id, r);
     for (const [id, r] of Object.entries(ROOMS)) props(id, r);
@@ -549,7 +555,7 @@
     if (focused) {
       const r = ROOMS[focused];
       ctx.save(); ctx.globalAlpha = Math.min(0.62, (cam.z - 1) * 0.6);
-      ctx.beginPath(); ctx.rect(-W, -H, W * 3, H * 3); ctx.rect(r.x - 12, r.y - 12, r.w + 24, r.h + 24);
+      ctx.beginPath(); ctx.rect(-5000, -5000, 10000, 10000); ctx.rect(r.x - 12, r.y - 12, r.w + 24, r.h + 24);
       ctx.fillStyle = '#000'; ctx.fill('evenodd'); ctx.restore();
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -585,6 +591,6 @@
     return { init, setActive: (v) => { active = !!v; } };
   })();
 
-  window.Station = { init, setBusy, packet, highlight, launchShuttle, focus, ROOMS, relayout: () => placeLabels() };
+  window.Station = { init, setBusy, packet, highlight, launchShuttle, focus, ROOMS, relayout: () => { placeLabels(); if (!focused) Object.assign(camT, { x: W / 2, y: H / 2, z: 1 }); } };
   window.Core = Core;
 })();

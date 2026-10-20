@@ -25,6 +25,11 @@
     </div>
     <div class="winctl">
       <button id="btn-update" class="upd" hidden>UPDATE READY · RESTART</button>
+      <div class="dock" id="dock" role="group" aria-label="Windows">
+        <button class="dk" data-panel="roster" title="Show or hide the crew roster">CREW</button>
+        <button class="dk" data-panel="cmd" title="Show or hide the ULTRON panel">ULTRON</button>
+        <button class="dk" data-panel="term" title="Show or hide the production terminal">TERMINAL</button>
+      </div>
       <button id="btn-settings" class="hw-btn" title="Settings">SETTINGS</button>
       <button class="wc" id="wc-min" title="Minimise">&#x2013;</button>
       <button class="wc" id="wc-max" title="Maximise">&#x25A1;</button>
@@ -34,7 +39,7 @@
 
   <main class="deck">
     <aside class="roster metal panel screws">
-      <h2 class="engr">CREW ROSTER</h2>
+      <div class="phead"><h2 class="engr">CREW ROSTER</h2><button class="pclose" data-panel="roster" title="Close">✕</button></div>
       <ul id="roster"></ul>
       <div class="roster-foot">
         <div class="led-row"><span class="led" id="led-auto"></span><span id="auto-label">AUTOPILOT OFF</span></div>
@@ -59,6 +64,7 @@
     </section>
 
     <aside class="commander metal panel screws">
+      <button class="pclose abs" data-panel="cmd" title="Close">✕</button>
       <div class="cmd-top">
         <div class="glass core-glass"><canvas id="core" width="220" height="220"></canvas></div>
         <div class="cmd-id">
@@ -116,6 +122,7 @@
     </aside>
 
     <section class="terminal metal panel screws">
+      <div class="term-resize" id="term-resize" title="Drag to resize"></div>
       <div class="term-head">
         <h2 class="engr">ETSY PRODUCTION TERMINAL</h2>
         <nav class="tabs">
@@ -128,6 +135,7 @@
           <select id="filter" aria-label="Filter products"><option value="all">All</option><option value="review">Needs review</option><option value="ready">Ready</option><option value="uploaded">On Printify</option><option value="published">Live on Etsy</option><option value="retired">Retired</option><option value="failed">Failed</option></select>
           <button class="hw-btn" id="btn-export">EXPORT READY</button>
           <button class="hw-btn" id="btn-sync">SYNC</button>
+          <button class="pclose" data-panel="term" title="Close">✕</button>
         </div>
       </div>
       <div class="glass term-body">

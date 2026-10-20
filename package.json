@@ -1,6 +1,6 @@
 {
   "name": "kivo-ultron",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Kivo Ultron — autonomous AI commerce station",
   "main": "main.js",
   "scripts": {

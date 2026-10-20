@@ -166,14 +166,21 @@
     throw new Error('Agent returned unreadable data');
   }
   const fatal = (e) => /API key|x-api-key|401|403|credit|billing|cap reached/i.test(e.message);
-  async function askJSON(prompt, opts) {
-    let lastErr;
-    for (let i = 0; i < 2; i++) {
-      try { return parseJSON(await ask(prompt + (i ? '\n\nIMPORTANT: reply with valid JSON only, nothing else.' : ''), opts)); }
-      catch (e) { lastErr = e; if (fatal(e)) throw e; }
-    }
-    throw lastErr;
+  // ask for JSON; if the reply is malformed, repair it cheaply before re-asking
+  const localRepair = (t) => t.replace(/[\u201c\u201d]/g, '"').replace(/,\s*([}\]])/g, '$1');
+  async function askJSON(prompt, opts = {}) {
+    let raw = await ask(prompt, opts);
+    try { return parseJSON(raw); } catch {}
+    try { return parseJSON(localRepair(raw)); } catch {}
+    try {
+      const fixed = await ask(`The text below was meant to be valid JSON but has a syntax error (often an unescaped quote inside a string). Return ONLY the corrected JSON with the same content — escape inner quotes, no commentary.\n\n${raw.slice(0, 20000)}`,
+        { ...opts, model: 'claude-haiku-5-5', task: (opts.task || 'Working') + ' (fixing format)', maxTokens: Math.max(2000, opts.maxTokens || 2000) });
+      return parseJSON(fixed);
+    } catch (e) { if (fatal(e)) throw e; }
+    raw = await ask(prompt + '\n\nIMPORTANT: reply with valid JSON only. Escape any double quotes inside strings as \\".', opts);
+    return parseJSON(raw);
   }
+
   function shopContext() {
     const s = D.settings, t = tpl();
     return `Today is ${new Date().toDateString()}. Shop: ${s.shopName || 'an Etsy print-on-demand shop'}. Brand voice: ${s.voice || t.voice}. Shop focus: ${s.defaultBrief || t.brief}
@@ -1464,11 +1471,40 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     };
     $('#btn-abort').onclick = () => { abortFlag = true; log('ultron', 'Abort requested — finishing current step…', 'err'); };
     $('#btn-auto').onclick = () => setAuto(!D.settings.auto);
-    const expand = (on) => {
-      const deck = $('.deck'); on = on ?? !deck.classList.contains('map-max');
-      deck.classList.toggle('map-max', on); $('#btn-expand').textContent = on ? '⤡ SHRINK' : '⤢ EXPAND';
+    // window layout: crew roster, ULTRON panel and terminal can be closed / reopened / resized
+    const PANELS = { roster: '.roster', cmd: '.commander', term: '.terminal' };
+    const layout = () => { const L = (D.ui.layout = D.ui.layout || {}); for (const [k, v] of Object.entries({ roster: true, cmd: true, term: true, termH: 300 })) if (L[k] === undefined) L[k] = v; return L; };
+    const applyLayout = () => {
+      const L = layout(), narrow = window.innerWidth < 1300;
+      for (const [k, sel] of Object.entries(PANELS)) $(sel).hidden = !L[k];
+      const cols = [L.roster && (narrow ? '200px' : '230px'), 'minmax(0, 1fr)', L.cmd && (narrow ? '300px' : '340px')].filter(Boolean);
+      const r1 = [L.roster && 'roster', 'station', L.cmd && 'commander'].filter(Boolean), r2 = [L.roster && 'terminal', 'terminal', L.cmd && 'commander'].filter(Boolean);
+      const deck = $('.deck');
+      deck.style.gridTemplateColumns = cols.join(' ');
+      deck.style.gridTemplateRows = L.term ? `minmax(0, 1fr) ${L.termH}px` : 'minmax(0, 1fr)';
+      deck.style.gridTemplateAreas = L.term ? `"${r1.join(' ')}" "${r2.join(' ')}"` : `"${r1.join(' ')}"`;
+      $$('.dk').forEach((b) => b.classList.toggle('on', !!L[b.dataset.panel]));
+      const allClosed = !L.roster && !L.cmd && !L.term;
+      $('#btn-expand').textContent = allClosed ? '⤡ SHRINK' : '⤢ EXPAND';
       requestAnimationFrame(() => Station.relayout());
     };
+    const setPanel = (k, on) => { const L = layout(); L[k] = on ?? !L[k]; persist(); applyLayout(); };
+    $$('[data-panel]').forEach((b) => (b.onclick = () => setPanel(b.dataset.panel, b.classList.contains('pclose') ? false : undefined)));
+    window.addEventListener('resize', applyLayout);
+    const expand = () => {
+      const L = layout(), allClosed = !L.roster && !L.cmd && !L.term;
+      if (allClosed) Object.assign(L, L.before || { roster: true, cmd: true, term: true });
+      else { L.before = { roster: L.roster, cmd: L.cmd, term: L.term }; Object.assign(L, { roster: false, cmd: false, term: false }); }
+      persist(); applyLayout();
+    };
+    // drag the terminal's top edge to resize it
+    $('#term-resize').addEventListener('mousedown', (e) => {
+      e.preventDefault(); const L = layout(), y0 = e.clientY, h0 = L.termH;
+      const mv = (ev) => { L.termH = Math.max(150, Math.min(window.innerHeight - 260, h0 - (ev.clientY - y0))); applyLayout(); };
+      const up = () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); persist(); };
+      window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+    });
+    applyLayout();
     $('#btn-expand').onclick = () => expand();
     document.addEventListener('keydown', (e) => {
       if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1604,7 +1640,7 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
       if (c === 'toggleAuto') setAuto(!D.settings.auto);
     });
   }
-  function saveUI() { D.ui = { brief: $('#brief').value, count: +$('#count').value || 3, tone: $('#tone').value }; persist(); }
+  function saveUI() { D.ui = { ...D.ui, brief: $('#brief').value, count: +$('#count').value || 3, tone: $('#tone').value }; persist(); }
 
   // ---------- boot ----------
   async function boot() {
