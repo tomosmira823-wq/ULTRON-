@@ -8,7 +8,7 @@
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const HOUR = 3600e3;
 
-  const CAP = { store: 6, marketing: 5, custom: 18 };
+  const CAP = { store: 6, marketing: 6, custom: 18 };
   const HUES = [['Cyan', 188], ['Teal', 165], ['Green', 140], ['Gold', 44], ['Orange', 24], ['Red', 356], ['Pink', 322], ['Blue', 215], ['Violet', 280]];
   const TOOL_NAMES = { web: 'Web search', store: 'Store data', marketing: 'Marketing data', memory: 'Past outputs' };
   const ICONS = OfficeKit.ICONS;
@@ -18,8 +18,8 @@
   // ---------- ready-made spaces ----------
   const bot = (name, team, icon, job, tools = {}, extra = {}) => ({ name, team, icon, job, tools, ...extra });
   const TEMPLATES = [
-    { id: 'blank', name: 'Blank space', hue: 188, tagline: 'Start empty and hire your own bots.', mission: '', brief: '', agents: [] },
-    { id: 'sales', name: 'Sales Team', hue: 188, tagline: 'Find local businesses, research them, write the outreach.',
+    { id: 'blank', style: 'office', name: 'Blank space', hue: 188, tagline: 'Start empty and hire your own bots.', mission: '', brief: '', agents: [] },
+    { id: 'sales', style: 'office', name: 'Sales Team', hue: 188, tagline: 'Find local businesses, research them, write the outreach.',
       mission: 'Find local small businesses that would benefit from a better website, AI automation or custom software, research each one, and write personal outreach that gets replies.',
       brief: 'Find 5 businesses in Cheshire that need a better website and write an outreach email for each.',
       agents: [
@@ -29,7 +29,7 @@
         bot('Email Writer', 'Pitch', 'mail', 'Write a short personal cold email for each lead (subject + under 120 words). Mention one real detail about their business. Friendly, no hype, one clear call to action.'),
         bot('Checker', 'Quality', 'check', 'Check every email for made-up facts, spelling, tone and spammy wording. Output the final, ready-to-send list as a table: business, email address if known, subject, email.', {}, { approve: true }),
       ] },
-    { id: 'youtube', name: 'YouTube Studio', hue: 356, tagline: 'Ideas, scripts, titles, thumbnails and descriptions.',
+    { id: 'youtube', style: 'studio', name: 'YouTube Studio', hue: 356, tagline: 'Ideas, scripts, titles, thumbnails and descriptions.',
       mission: 'Plan and write YouTube videos and Shorts that people actually watch to the end.',
       brief: 'Plan 3 Shorts about weird science facts.',
       agents: [
@@ -39,7 +39,7 @@
         bot('SEO Writer', 'Packaging', 'doc', 'Write the description, 10 tags and 3 hashtags for each video.'),
         bot('Shot List', 'Production', 'film', 'Turn each script into a shot list and edit notes: shot, visual, on-screen text, sound, duration.'),
       ] },
-    { id: 'research', name: 'Research Lab', hue: 215, tagline: 'Deep dives on any topic, fact-checked and written up.',
+    { id: 'research', style: 'lab', name: 'Research Lab', hue: 215, tagline: 'Deep dives on any topic, fact-checked and written up.',
       mission: 'Research any question properly using the web and write it up as a clear, sourced report.',
       brief: 'What are the best mini PCs for a small office backup server in 2026?',
       agents: [
@@ -48,7 +48,7 @@
         bot('Analyst', 'Analysis', 'chart', 'Compare the options and findings. Pull out what actually matters, the trade-offs and a recommendation with reasons.'),
         bot('Report Writer', 'Writing', 'doc', 'Write the final report: a 3-line answer first, then sections, a comparison table if useful, and a sources list with links.'),
       ] },
-    { id: 'finance', name: 'Finance Desk', hue: 44, tagline: 'Profit, fees and a tax pot from your store numbers.',
+    { id: 'finance', style: 'trading', name: 'Finance Desk', hue: 44, tagline: 'Profit, fees and a tax pot from your store numbers.',
       mission: 'Keep track of how the business is really doing: profit after every cost, where money is leaking, and how much to put aside for tax. Not an accountant: flag anything that needs one.',
       brief: 'Give me this month’s profit picture and what to put aside for tax.',
       agents: [
@@ -56,7 +56,7 @@
         bot('Profit Analyst', 'Numbers', 'chart', 'Find which products make and lose money and where costs can be cut. Be specific.', { store: true }),
         bot('Tax Pot', 'Planning', 'cal', 'Estimate how much to put aside for UK income tax and National Insurance on this profit, with the assumptions written out. Say clearly that it is an estimate, not tax advice.', { web: true }),
       ] },
-    { id: 'trading', name: 'Trading Research', hue: 140, tagline: 'Market research and a paper-trade journal. No real trades.',
+    { id: 'trading', style: 'trading', name: 'Trading Research', hue: 140, tagline: 'Market research and a paper-trade journal. No real trades.',
       mission: 'Research markets and keep a paper-trading journal to test ideas. This space never places real trades and is not financial advice.',
       brief: 'Give me a morning brief on my watchlist: AAPL, NVDA, MSFT, and the FTSE 100.',
       agents: [
@@ -66,7 +66,7 @@
         bot('Risk Officer', 'Desk', 'check', 'Point out the risks, what could go wrong and position-size limits for any idea. Remind that this is research, not advice.'),
         bot('Paper Trader', 'Journal', 'cal', 'Record any paper trades as a journal table (date, instrument, side, entry, stop, target, reason). Pretend money only, never real orders.', { memory: true }),
       ] },
-    { id: 'support', name: 'Customer Service', hue: 24, tagline: 'Sorts customer messages and drafts the replies.',
+    { id: 'support', style: 'office', name: 'Customer Service', hue: 24, tagline: 'Sorts customer messages and drafts the replies.',
       mission: 'Handle customer messages for the shop: work out what each one needs and draft a warm, fixed-it reply.',
       brief: 'Paste customer messages here and I will draft replies.',
       agents: [
@@ -75,7 +75,7 @@
         bot('Reply Writer', 'Replies', 'mail', 'Write a short, warm reply for each message with a clear fix. Never invent tracking numbers or dates.'),
         bot('Tone Check', 'Replies', 'check', 'Check every reply for tone, accuracy and Etsy rules. Output the final replies ready to copy.'),
       ] },
-    { id: 'dev', name: 'Dev Team', hue: 200, tagline: 'Spec, build plan, code, tests and review.',
+    { id: 'dev', style: 'station', name: 'Dev Team', hue: 200, tagline: 'Spec, build plan, code, tests and review.',
       mission: 'Turn an app or website idea into a clear spec, a build plan and working code with tests.',
       brief: 'A one-page booking site for a barber shop.',
       agents: [
@@ -85,7 +85,7 @@
         bot('Tester', 'Build', 'check', 'Write tests and a manual test checklist for the code. Point out bugs you can see.'),
         bot('Reviewer', 'Review', 'doc', 'Review everything for security, bugs and simplicity. List fixes in priority order.'),
       ] },
-    { id: 'life', name: 'Life Admin', hue: 322, tagline: 'Plans, bookings, bills and to-dos sorted.',
+    { id: 'life', style: 'office', name: 'Life Admin', hue: 322, tagline: 'Plans, bookings, bills and to-dos sorted.',
       mission: 'Take everyday life admin off my plate: plans, research, bookings and lists.',
       brief: 'Plan a cheap day out with a 1-year-old near Cheshire this Saturday.',
       agents: [
@@ -93,7 +93,7 @@
         bot('Researcher', 'Plan', 'search', 'Look up the real places, prices, opening times and links needed for the plan.', { web: true }),
         bot('List Maker', 'Lists', 'lines', 'Turn it all into a final checklist and a short summary I can send to someone.'),
       ] },
-    { id: 'product', name: 'Product Lab', hue: 30, tagline: 'New product ideas, checks and spec sheets.',
+    { id: 'product', style: 'workshop', name: 'Product Lab', hue: 30, tagline: 'New product ideas, checks and spec sheets.',
       mission: 'Come up with new products to sell, check there is real demand and write them up ready to make.',
       brief: 'New product ideas for my shirt shop beyond t-shirts.',
       agents: [
@@ -160,8 +160,14 @@
     Office.setExtras(s.hires.marketing.map((h) => ({ id: h.id, name: h.name, icon: h.icon })));
     if (current && floor) {
       const sp = get(current);
-      if (sp) floor.configure({ hue: sp.hue, agents: sp.agents.map((a) => ({ id: a.id, name: a.name, team: a.team, icon: a.icon })), headers: headers(sp), media: wallMedia(sp) });
+      if (sp) floor.configure({ hue: sp.hue, style: sp.style || 'office', ticker: sp.style === 'trading' ? ticker(sp) : '', agents: sp.agents.map((a) => ({ id: a.id, name: a.name, team: a.team, icon: a.icon })), headers: headers(sp), media: wallMedia(sp) });
     }
+  }
+  function ticker(sp) {
+    const done = sp.runs.filter((r) => r.status === 'done');
+    const bits = [`JOBS DONE ${done.length}`, `BOTS ${sp.agents.length}`, `SPEND TODAY ${K.usd(sp.agents.reduce((n, a) => n + K.costOf(a.id), 0))}`];
+    for (const r of done.slice(-4).reverse()) bits.push('▲ ' + String(r.title || r.brief).toUpperCase().slice(0, 40));
+    return bits.join('     ');
   }
   function headers(sp) {
     const done = sp.runs.filter((r) => r.status === 'done').length;
@@ -740,22 +746,23 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
   let bctx = null;
   function openBuilder(id) {
     const sp = id ? get(id) : null;
-    bctx = { id: sp?.id || null, hue: sp?.hue ?? 188, template: null, agents: sp ? sp.agents.map((a) => ({ ...a, tools: { ...a.tools } })) : [] };
+    bctx = { id: sp?.id || null, hue: sp?.hue ?? 188, style: sp?.style || 'office', template: null, agents: sp ? sp.agents.map((a) => ({ ...a, tools: { ...a.tools } })) : [] };
     $('#sb-title').textContent = sp ? `EDIT ${sp.name.toUpperCase()}` : 'NEW SPACE';
     $('#sb-name').value = sp?.name || ''; $('#sb-mission').value = sp?.mission || ''; $('#sb-brief').value = sp?.brief || '';
     $('#sb-del').hidden = !sp; $('#sb-export').hidden = !sp; $('#sb-tpl-l').hidden = !!sp; $('#sb-tpls').hidden = !!sp; $('#sb-msg').textContent = '';
     const g = $('#sb-tpls'); g.textContent = '';
     if (!sp) for (const t of TEMPLATES) {
       const b = el('button', 'tpl' + (t.id === 'blank' ? ' on' : '')); b.style.setProperty('--sp', `hsl(${t.hue} 100% 70%)`);
-      b.append(el('b', '', t.name), el('span', '', t.tagline), el('i', '', t.agents.length ? `${t.agents.length} bots` : 'empty'));
+      b.append(el('b', '', t.name), el('span', '', t.tagline), el('i', '', (t.agents.length ? `${t.agents.length} bots` : 'empty') + ' · ' + OfficeKit.STYLES[t.style || 'office'].toLowerCase()));
       b.onclick = () => { $$('#sb-tpls .tpl').forEach((x) => x.classList.toggle('on', x === b)); pickTemplate(t); };
       g.append(b);
     }
+    const ss = $('#sb-style'); ss.textContent = ''; for (const [v, n] of Object.entries(OfficeKit.STYLES)) { const o = el('option', '', n); o.value = v; ss.append(o); } ss.value = bctx.style; ss.onchange = () => (bctx.style = ss.value);
     renderHues(); renderBuilderBots();
     $('#sp-builder').hidden = false; setTimeout(() => $('#sb-name').focus(), 50);
   }
   function pickTemplate(t) {
-    bctx.template = t.id; bctx.hue = t.hue;
+    bctx.template = t.id; bctx.hue = t.hue; bctx.style = t.style || 'office'; $('#sb-style').value = bctx.style;
     if (t.id !== 'blank') { $('#sb-name').value = t.name; $('#sb-mission').value = t.mission; $('#sb-brief').value = t.brief; }
     bctx.agents = t.agents.map((a) => cleanAgent({ ...a, model: a.tools?.web ? DEF_MODEL : a.model }, 'custom'));
     renderHues(); renderBuilderBots();
@@ -801,8 +808,8 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
     if (['STORE', 'MARKETING'].includes(name.toUpperCase())) { $('#sb-msg').textContent = 'That name is taken by a built-in department.'; return; }
     const agents = bctx.agents.filter((a) => a.name.trim() && a.job.trim()).slice(0, CAP.custom).map((a) => cleanAgent(a, 'custom'));
     let sp = bctx.id && get(bctx.id);
-    if (sp) Object.assign(sp, { name: name.slice(0, 24), hue: bctx.hue, mission: $('#sb-mission').value.trim(), brief: $('#sb-brief').value.trim(), agents });
-    else { sp = { id: 's_' + uid(), name: name.slice(0, 24), hue: bctx.hue, mission: $('#sb-mission').value.trim(), brief: $('#sb-brief').value.trim(), agents, runs: [], auto: { on: false, hours: 24, last: 0 }, createdAt: Date.now(), template: bctx.template }; S().list.push(sp); K.log('ultron', `New space: ${sp.name} with ${agents.length} bots.`, 'ok'); }
+    if (sp) Object.assign(sp, { name: name.slice(0, 24), hue: bctx.hue, style: bctx.style, mission: $('#sb-mission').value.trim(), brief: $('#sb-brief').value.trim(), agents });
+    else { sp = { id: 's_' + uid(), name: name.slice(0, 24), hue: bctx.hue, style: bctx.style, mission: $('#sb-mission').value.trim(), brief: $('#sb-brief').value.trim(), agents, runs: [], auto: { on: false, hours: 24, last: 0 }, createdAt: Date.now(), template: bctx.template }; S().list.push(sp); K.log('ultron', `New space: ${sp.name} with ${agents.length} bots.`, 'ok'); }
     for (const a of agents) K.agentState[a.id] = K.agentState[a.id] || { status: K.keys.anthropic ? 'IDLE' : 'OFFLINE' };
     save(); $('#sp-builder').hidden = true;
     K.setDept(sp.id);
@@ -817,7 +824,7 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
   // ---------- import / export ----------
   const portable = (a) => ({ name: a.name, team: a.team, job: a.job, model: a.model, icon: a.icon, tools: a.tools, approve: a.approve || undefined, when: a.when, feed: a.feed });
   function exportSpace(sp) {
-    const data = { kivo: 'space', v: 1, name: sp.name, hue: sp.hue, mission: sp.mission, brief: sp.brief, agents: sp.agents.map(portable) };
+    const data = { kivo: 'space', v: 1, name: sp.name, hue: sp.hue, style: sp.style, mission: sp.mission, brief: sp.brief, agents: sp.agents.map(portable) };
     kivo.saveFile({ name: sp.name.replace(/[^\w -]/g, '') + '.kivo-space.json', data: JSON.stringify(data, null, 2), filters: [{ name: 'Kivo space', extensions: ['json'] }] }).then((f) => f && K.toast('Saved ' + f));
   }
   function exportHires(d) {
@@ -842,7 +849,7 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
     }
     if (j.kivo !== 'space' || !j.name) { K.toast('That file isn’t a Kivo space.', true); return; }
     let name = String(j.name).slice(0, 24); while (S().list.some((s) => s.name === name)) name = (name + ' 2').slice(0, 24);
-    const sp = { id: 's_' + uid(), name, hue: Number(j.hue) || 188, mission: String(j.mission || ''), brief: String(j.brief || ''), agents: agents.slice(0, CAP.custom).map((a) => cleanAgent(a, 'custom')), runs: [], auto: { on: false, hours: 24, last: 0 }, createdAt: Date.now(), template: 'import' };
+    const sp = { id: 's_' + uid(), name, hue: Number(j.hue) || 188, style: OfficeKit.STYLES[j.style] ? j.style : 'office', mission: String(j.mission || ''), brief: String(j.brief || ''), agents: agents.slice(0, CAP.custom).map((a) => cleanAgent(a, 'custom')), runs: [], auto: { on: false, hours: 24, last: 0 }, createdAt: Date.now(), template: 'import' };
     S().list.push(sp); save(); $('#sp-builder').hidden = true; K.toast(`Imported ${sp.name} · ${sp.agents.length} bots`); K.setDept(sp.id);
   }
 
@@ -886,7 +893,7 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
       const mission = String(a.mission || a.brief || a.description || tpl?.mission || '');
       let agents = tpl && tpl.id !== 'blank' ? tpl.agents.map((b) => cleanAgent(b, 'custom')) : [];
       if (!agents.length && mission) { note(`▶ Designing a team for ${name}…`); agents = (await designBots(mission, Math.max(2, Math.min(8, Number(a.count) || 4)), `a space called "${name}"`, 'custom')).map((b) => cleanAgent(b, 'custom')); }
-      const sp = { id: 's_' + uid(), name, hue: tpl?.hue ?? HUES[S().list.length % HUES.length][1], mission, brief: String(a.firstBrief || tpl?.brief || ''), agents, runs: [], auto: { on: false, hours: 24, last: 0 }, createdAt: Date.now(), template: tpl?.id || 'ultron' };
+      const sp = { id: 's_' + uid(), name, hue: tpl?.hue ?? HUES[S().list.length % HUES.length][1], style: OfficeKit.STYLES[a.style] ? a.style : tpl?.style || 'office', mission, brief: String(a.firstBrief || tpl?.brief || ''), agents, runs: [], auto: { on: false, hours: 24, last: 0 }, createdAt: Date.now(), template: tpl?.id || 'ultron' };
       S().list.push(sp); save();
       for (const b of agents) K.agentState[b.id] = { status: K.keys.anthropic ? 'IDLE' : 'OFFLINE' };
       note(`▶ Built the ${name} space with ${agents.length} bots`);

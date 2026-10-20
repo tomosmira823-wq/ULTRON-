@@ -545,6 +545,7 @@ code.copy { display: inline-block; margin-top: 3px; font: 12px/1.3 var(--f-term)
 .dept.add { color: var(--accent); opacity: .8; }
 .dept.add:hover { opacity: 1; }
 body[data-dept="space"] .glass { background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--accent) 9%, #05070a) 0%, #040507 70%); }
+#storefloor { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
 #spacefloor { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
 .mc-run.sp { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 80%, #fff), var(--accent-dim)); color: #05080a; box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 2px 0 #000, 0 0 18px var(--accent-glow); }
 .mc-run.sp.stop { color: #fff; background: linear-gradient(180deg, #ff6a5f, #c9322a); }

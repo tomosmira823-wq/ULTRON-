@@ -62,7 +62,7 @@
     shopId: '', shopTitle: '', shopChannel: '', blueprintId: '', blueprintTitle: '', providerId: '', providerTitle: '',
     colours: 'White', variants: [],
     auto: false, hours: 6, acount: 3, maxPerDay: 10, qaMin: 85, retireDays: 60, tokenCap: 0, spendCap: 0,
-    autoApprove: true, winners: true,
+    autoApprove: true, winners: true, storeFloor: 'workshop', mkFloor: 'office',
   };
   let D = {
     setupDone: false, products: [], log: [], orders: [], chat: [],
@@ -789,7 +789,7 @@ Available actions (use only when the owner asks for them or clearly wants them):
 - {"type":"model","agent":"ultron"|"scout"|"forge"|"scribe"|"auditor"|"all","model":"opus"|"sonnet"|"haiku"} switch the Claude model an agent uses (Opus = best quality but roughly 2x Sonnet's cost; Haiku is about 20x cheaper than Sonnet; Haiku = fastest and cheapest, fine for checks)
 - {"type":"show","status":"review"|"published"|"ready"|"failed"|"all"} show those products in the terminal
 - {"type":"hire","space":"store"|"marketing"|"<custom space name>"|"current","count":1-6,"brief":"what the new bots should do"} hire new bots into a space (the app designs them from the brief; or give "agents":[{"name","job","team"}])
-- {"type":"newspace","name":"...","mission":"what the space is for","template":"sales"|"youtube"|"research"|"finance"|"trading"|"support"|"dev"|"life"|"product"|"blank","count":2-8} build a new space (department) with its own team of bots; leave out template to have the team designed from the mission
+- {"type":"newspace","name":"...","mission":"what the space is for","template":"sales"|"youtube"|"research"|"finance"|"trading"|"support"|"dev"|"life"|"product"|"blank","style":"office"|"trading"|"studio"|"lab"|"workshop"|"station","count":2-8} build a new space (department) with its own team of bots and floor style; leave out template to have the team designed from the mission
 - {"type":"runspace","space":"<custom space name>","brief":"..."} give a custom space a job and start it
 IMPORTANT: actions only happen if you put them in "actions". Never say you started, queued or changed something unless the matching action is in your list — the app confirms each action to the owner itself. If the owner asks for designs, always include a mission action.
 Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}`, { maxTokens: 1500, agent: 'ultron', task: 'Answering you' });
@@ -913,7 +913,32 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
   // ---------- rendering ----------
   const STATUS = { ready: ['READY', 'ready'], review: ['NEEDS REVIEW', 'medium'], uploaded: ['ON PRINTIFY', 'uploaded'], published: ['LIVE', 'published'], failed: ['FAILED', 'failed'], retired: ['RETIRED', ''] };
   function statusLabel(p) { if (p.status === 'working') return { t: (p.stage || 'working').toUpperCase(), c: 'working' }; const s = STATUS[p.status] || [p.status.toUpperCase(), '']; return { t: s[0], c: s[1] }; }
+  const wallArt = new Map();
+  function refreshStoreWalls() {
+    const prods = D.products.filter((p) => p.svg && p.status !== 'retired').slice(-18).reverse();
+    const media = prods.map((p) => {
+      const label = p.sales?.qty ? `${p.sales.qty} sold` : p.status === 'published' ? 'LIVE' : p.status === 'review' ? 'REVIEW' : '';
+      const key = p.id + (p.tone || '');
+      if (!wallArt.has(key)) {
+        const item = { img: null, label };
+        const src = new Image();
+        src.onload = () => {
+          const c = document.createElement('canvas'); c.width = 300; c.height = 505; const x = c.getContext('2d');
+          x.fillStyle = p.tone === 'dark' ? '#1d1f22' : '#efece6'; x.fillRect(0, 0, 300, 505);
+          x.drawImage(src, 20, 40, 260, 312);
+          x.fillStyle = p.tone === 'dark' ? '#eee' : '#222'; x.font = '600 20px Inter, sans-serif'; x.textAlign = 'center'; x.fillText(String(p.trend?.phrase || '').slice(0, 24), 150, 410);
+          const im = new Image(); im.src = c.toDataURL('image/png'); item.img = im;
+        };
+        src.src = svgURL(p.svg);
+        wallArt.set(key, item);
+      }
+      const it = wallArt.get(key); it.label = label; return it;
+    });
+    const live = D.products.filter((p) => p.status === 'published').length, sold = D.products.reduce((n, p) => n + (p.sales?.qty || 0), 0);
+    Station.setWalls(media, `${D.settings.shopName || 'Your shop'} · ${live} live · ${sold} sold`, `Design wall · ${prods.length} designs`);
+  }
   function renderPipeline() {
+    refreshStoreWalls();
     const box = $('#tab-pipeline'); box.textContent = '';
     const f = $('#filter').value;
     const list = D.products.filter((p) => f === 'all' || p.status === f).slice().reverse();
@@ -1521,6 +1546,11 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     $('#s-qa').value = s.qaMin; $('#s-retire').value = s.retireDays; $('#s-tokcap').value = s.spendCap;
     $('#s-approve').checked = s.autoApprove; $('#s-winners').checked = s.winners;
     $('#s-login').checked = prefs.openAtLogin; $('#s-tray').checked = prefs.closeToTray;
+    for (const [id, k, extra] of [['#s-floor', 'storeFloor', [['classic', 'Classic pixel station']]], ['#s-mkfloor', 'mkFloor', []]]) {
+      const sel = $(id); sel.textContent = '';
+      for (const [v, n] of [...Object.entries(OfficeKit.STYLES), ...extra]) { const o = el('option', '', n); o.value = v; sel.append(o); }
+      sel.value = s[k];
+    }
     const am = $('#s-agent-models'); am.textContent = '';
     for (const ag of AI_AGENTS) {
       const f = el('div', 'field'); const l = el('label', 'lbl', ag.toUpperCase()); l.htmlFor = 's-am-' + ag;
@@ -1721,6 +1751,7 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
       s.mode = $('#s-mode').value; s.hours = Math.max(1, +$('#s-hours').value || 6); s.acount = Math.max(1, Math.min(12, +$('#s-acount').value || 3)); s.maxPerDay = Math.max(1, +$('#s-cap').value || 10);
       s.qaMin = Math.max(0, Math.min(100, +$('#s-qa').value || 0)); s.retireDays = Math.max(0, +$('#s-retire').value || 0); s.spendCap = Math.max(0, +$('#s-tokcap').value || 0);
       s.autoApprove = $('#s-approve').checked; s.winners = $('#s-winners').checked;
+      s.storeFloor = $('#s-floor').value; s.mkFloor = $('#s-mkfloor').value; Station.setFloor(s.storeFloor); Office.configure({ style: s.mkFloor }); setDept(dept());
       s.agentModels = { ...s.agentModels }; for (const ag of AI_AGENTS) s.agentModels[ag] = $('#s-am-' + ag).value;
       s.currency = $('#s-cur').value; s.defaultCost = Number($('#s-cost').value) || DEFAULTS.defaultCost; s.minMargin = Number($('#s-minm').value) || 0; s.vat = $('#s-vat').checked;
       const shop = $('#s-shop'); if (shop.value && shop.value !== s.shopId) { s.shopId = shop.value; s.shopTitle = shop.selectedOptions[0].textContent.replace(/ \(\w+\)$/, ''); s.shopChannel = (shop.selectedOptions[0].textContent.match(/\((\w+)\)$/) || [])[1] || s.shopChannel; }
@@ -1764,9 +1795,9 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     const kind = sp ? 'space' : d;
     document.body.dataset.dept = kind;
     const mk = kind === 'marketing', st = kind === 'store';
-    $('#station').hidden = !st; $('#room-labels').hidden = !st; $('#office').hidden = !mk; Office.show(mk);
+    Station.show(st); $('#office').hidden = !mk; Office.show(mk);
     if (sp) SP.show(d); else SP.hideCustom();
-    $('#map-title').textContent = sp ? sp.name.toUpperCase() + ' FLOOR' : mk ? 'MARKETING FLOOR' : 'STATION MAP';
+    $('#map-title').textContent = sp ? sp.name.toUpperCase() + ' FLOOR' : mk ? 'MARKETING FLOOR' : Station.floor === 'classic' ? 'STATION MAP' : 'SHOP FLOOR';
     $('#mission-chip').hidden = !st;
     $('#readouts').hidden = !st; $('#readouts-mk').hidden = !mk; $('#readouts-sp').hidden = !sp;
     $('#brief-store').hidden = !st; $('#brief-mk').hidden = !mk; $('#brief-sp').hidden = !sp;
@@ -1806,8 +1837,8 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     prefs = await kivo.getPrefs();
     $('#brief').value = D.ui.brief || D.settings.defaultBrief || tpl().brief;
     $('#count').value = D.ui.count; $('#tone').value = D.ui.tone || tpl().tone; $('#mode').value = D.settings.mode;
-    Station.init($('#station'), $('#room-labels'), selectAgent);
-    Office.init($('#office'), selectAgent);
+    Station.init($('#station'), $('#room-labels'), selectAgent); Station.setFloor(D.settings.storeFloor);
+    Office.init($('#office'), selectAgent); Office.configure({ style: D.settings.mkFloor });
     Core.init($('#core'));
     wire();
     for (const a of AGENTS) agentState[a.id] = { status: keys.anthropic ? 'IDLE' : 'OFFLINE' };

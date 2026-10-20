@@ -74,6 +74,7 @@
       </div>
       <div class="glass station-glass">
         <canvas id="station" width="640" height="360"></canvas>
+        <canvas id="storefloor" hidden></canvas>
         <canvas id="office" hidden></canvas>
         <canvas id="spacefloor" hidden></canvas>
         <div id="room-labels"></div>
@@ -420,6 +421,10 @@
       <label class="chk"><input type="checkbox" id="s-winners"> Make variations of best sellers</label>
       <label class="chk"><input type="checkbox" id="s-login"> Start with Windows</label>
       <label class="chk"><input type="checkbox" id="s-tray"> Keep running in the tray when I close the window</label>
+      <div class="row">
+        <div class="field"><label class="lbl" for="s-floor">STORE FLOOR</label><select id="s-floor"></select></div>
+        <div class="field"><label class="lbl" for="s-mkfloor">MARKETING FLOOR</label><select id="s-mkfloor"></select></div>
+      </div>
 
       <h3 class="engr sm">CLAUDE</h3>
       <label class="lbl" for="s-akey">ANTHROPIC API KEY <span class="dim" id="s-akey-st"></span></label>
@@ -504,6 +509,7 @@
       <div class="tpl-grid sb-tpls" id="sb-tpls"></div>
       <div class="row">
         <div class="field"><label class="lbl" for="sb-name">NAME</label><input id="sb-name" type="text" maxlength="24" placeholder="e.g. Sales Team"></div>
+        <div class="field"><label class="lbl" for="sb-style">FLOOR</label><select id="sb-style"></select></div>
         <div class="field"><div class="lbl">COLOUR</div><div class="hues" id="sb-hues"></div></div>
       </div>
       <label class="lbl" for="sb-mission">WHAT IS THIS SPACE FOR?</label>
@@ -538,6 +544,7 @@
 <script src="templates.js"></script>
 <script src="station.js"></script>
 <script src="office.js"></script>
+<script src="storefloor.js"></script>
 <script src="app.js"></script>
 <script src="social.js"></script>
 <script src="marketing.js"></script>

@@ -11,6 +11,7 @@ A suite of AI departments ("spaces"). **STORE** designs and sells Etsy print-on-
 - **Hire bots into Store or Marketing** too: they get desks (6 in the Store's NEW HIRES annex, 5 on the Marketing floor), review every mission or campaign, and their notes feed into the next run.
 - Tell ULTRON in chat: "hire me 2 bots to check my prices", "build me a sales team", "run the sales team on barbers in Knutsford".
 - Export a space to a `.kivo-space.json` file and import it on another PC.
+- **Floor styles (2.2):** Neon office, Trading floor (ticker wall, chart screens), Studio (foam walls, ON AIR sign, mics), Lab (glass walls, helix), Print shop (hazard lines, gear) and Space station (star windows, globe). Pick one per space in the builder; Store and Marketing styles are in Settings. The Store now opens as an isometric print shop with your designs on the walls; the classic pixel station is still there in Settings.
 - Trading Research is research and a paper-trade journal only: it never places real trades and isn't financial advice.
 
 An autonomous AI commerce station for Windows. Eight Claude-powered agents run an Etsy print-on-demand line from a pixel-art space station:

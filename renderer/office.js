@@ -21,16 +21,17 @@
     };
   }
 
+  const STYLES = { office: 'Neon office', trading: 'Trading floor', studio: 'Studio', lab: 'Lab', workshop: 'Print shop', station: 'Space station' };
   // the seven floor slots around the hub, used for zones
   const SLOTS = [
     { u: [8, 13.5], v: [1.2, 4.6] }, { u: [15, 22.5], v: [1.2, 5.2] }, { u: [15.5, 22.5], v: [7.6, 12.4] }, { u: [13.5, 22.5], v: [15.5, 20.5] },
     { u: [6.5, 12.5], v: [16, 22.5] }, { u: [1.2, 5.5], v: [15, 22.5] }, { u: [1.2, 5.2], v: [7.5, 13] },
   ];
   // extra desks for bots hired onto the marketing floor (free space between the chief, the hub and the zones)
-  const EXTRA = [{ u: [6.4, 13.8], v: [5.4, 7.9], label: 'NEW HIRES' }, { u: [5.9, 8.7], v: [8.5, 14.3], label: 'NEW HIRES' }];
+  const EXTRA = [{ u: [6.2, 14.6], v: [5.4, 7.9], label: 'NEW HIRES', gap: 1.95 }, { u: [5.9, 8.7], v: [8.5, 14.3], label: 'NEW HIRES', gap: 1.95 }];
   const deskSlots = (z) => {
     const du = z.u[1] - z.u[0], dv = z.v[1] - z.v[0], alongU = du >= dv, L = alongU ? du : dv, S = alongU ? dv : du;
-    const cols = Math.max(1, Math.floor((L - 0.4) / 2.4)), rows = Math.max(1, Math.floor((S - 0.6) / 2.3));
+    const cols = Math.max(1, Math.floor((L - 0.4) / (z.gap || 2.4))), rows = Math.max(1, Math.floor((S - 0.6) / 2.3));
     const out = [];
     for (let r = 0; r < rows; r++) for (let k = 0; k < cols; k++) {
       const a = (alongU ? z.u[0] : z.v[0]) + (k + 0.5) * L / cols;
@@ -41,26 +42,32 @@
   };
   // lay out any list of agents [{id, name, team, icon}] onto the slots, grouped by team
   function autoLayout(list) {
-    const caps = SLOTS.map(deskSlots), zones = [], agents = [];
-    let s = 0, k = 0;
-    const teams = [];
-    for (const a of list) { const t = (a.team || 'TEAM').toUpperCase().slice(0, 18); if (!teams.includes(t)) teams.push(t); }
-    const ordered = teams.flatMap((t) => list.filter((a) => (a.team || 'TEAM').toUpperCase().slice(0, 18) === t));
-    for (const a of ordered) {
-      while (s < SLOTS.length && k >= caps[s].length) { s++; k = 0; }
-      if (s >= SLOTS.length) break;
-      const zid = 'z' + s, team = (a.team || 'TEAM').toUpperCase().slice(0, 18);
-      let z = zones.find((x) => x.id === zid);
-      if (!z) { z = { id: zid, label: team, u: SLOTS[s].u, v: SLOTS[s].v }; zones.push(z); }
-      else if (!z.label.split(' · ').includes(team)) z.label = (z.label + ' · ' + team).slice(0, 30);
-      const p = caps[s][k++];
-      agents.push({ id: a.id, zone: zid, u: p.u, v: p.v, name: a.name, icon: a.icon || 'doc' });
+    const caps = SLOTS.map(deskSlots), used = SLOTS.map(() => 0), zones = [], agents = [];
+    const teamOf = (a) => (a.team || 'TEAM').toUpperCase().slice(0, 18);
+    const teams = [...new Set(list.map(teamOf))];
+    const free = (i) => used[i] < caps[i].length;
+    let s = -1;
+    for (const team of teams) {
+      // each team gets its own zone while there are empty zones left
+      const next = used.findIndex((u, i) => i > s && u === 0);
+      s = next >= 0 ? next : used.findIndex((u, i) => free(i));
+      for (const a of list.filter((x) => teamOf(x) === team)) {
+        if (s < 0 || !free(s)) s = used.findIndex((u, i) => u === 0) >= 0 ? used.findIndex((u) => u === 0) : used.findIndex((u, i) => free(i));
+        if (s < 0) break;
+        const zid = 'z' + s;
+        let z = zones.find((x) => x.id === zid);
+        if (!z) { z = { id: zid, label: team, u: SLOTS[s].u, v: SLOTS[s].v }; zones.push(z); }
+        else if (!z.label.split(' · ').includes(team)) z.label = (z.label + ' · ' + team).slice(0, 30);
+        const p = caps[s][used[s]++];
+        agents.push({ id: a.id, zone: zid, u: p.u, v: p.v, name: a.name, icon: a.icon || 'doc' });
+      }
     }
     return { zones, agents, capacity: caps.reduce((n, c) => n + c.length, 0) };
   }
 
   function create(cfg) {
     let ZONES = cfg.zones || [], AGENTS = cfg.agents || [], BASE = { zones: ZONES, agents: AGENTS };
+    let style = STYLES[cfg.style] ? cfg.style : 'office', ticker = cfg.ticker || '';
     let T = theme(cfg.hue ?? 260), chiefTitle = cfg.chiefTitle || 'ULTRON · CHIEF OF STAFF', chiefIdle = cfg.chiefIdle || 'Coordinating the team';
     const CHIEF = { id: 'ultron', u: 4.0, v: 4.0, name: 'ULTRON', role: 'Chief of Staff' };
     const HUB = { u: 11.2, v: 10.8 };
@@ -164,6 +171,8 @@
     // replace the whole floor (custom spaces)
     function configure(o) {
       if (o.hue != null) T = theme(o.hue);
+      if (o.style && STYLES[o.style]) style = o.style;
+      if (o.ticker != null) ticker = o.ticker;
       if (o.chiefTitle) chiefTitle = o.chiefTitle;
       if (o.chiefIdle) chiefIdle = o.chiefIdle;
       if (o.agents) {
@@ -231,14 +240,67 @@
     }
 
     // ---------- scene ----------
+    const line = (a, b) => { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); };
     function drawFloor() {
-      poly(rectUV(0, N, 0, N), T.floor, T.a(0.35), 1.2);
-      ctx.globalAlpha = 0.18; ctx.strokeStyle = T.grid; ctx.lineWidth = 0.6;
-      for (let i = 2; i < N; i += 2) {
-        ctx.beginPath(); const a = iso(i, 0), b = iso(i, N); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
-        ctx.beginPath(); const c = iso(0, i), d = iso(N, i); ctx.moveTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.stroke();
+      const base = { office: T.floor, workshop: `hsl(${T.hue} 6% 9%)`, trading: `hsl(${T.hue} 30% 5%)`, studio: 'hsl(24 34% 13%)', lab: `hsl(${T.hue} 16% 17%)`, station: `hsl(${T.hue} 12% 7%)` }[style];
+      poly(rectUV(0, N, 0, N), base, T.a(0.35), 1.2);
+      ctx.lineWidth = 0.6;
+      if (style === 'studio') {
+        ctx.strokeStyle = 'hsl(24 30% 8%)'; ctx.globalAlpha = 0.9;
+        for (let i = 1; i < N; i++) line(iso(0, i), iso(N, i));
+        for (let i = 0; i < N; i++) for (let k = (i % 3) * 2 + 1; k < N; k += 6) line(iso(k, i), iso(k, i + 1));
+      } else if (style === 'workshop') {
+        ctx.strokeStyle = `hsl(${T.hue} 6% 16%)`; ctx.globalAlpha = 0.9;
+        for (let i = 4; i < N; i += 4) { line(iso(i, 0), iso(i, N)); line(iso(0, i), iso(N, i)); }
+        ctx.globalAlpha = 0.5; ctx.strokeStyle = '#ffc247'; ctx.setLineDash([6, 6]); line(iso(0.6, 0.6), iso(N - 0.6, 0.6)); line(iso(0.6, 0.6), iso(0.6, N - 0.6)); ctx.setLineDash([]);
+      } else if (style === 'lab') {
+        ctx.strokeStyle = T.a2(0.35); ctx.globalAlpha = 0.7;
+        for (let i = 1; i < N; i++) { line(iso(i, 0), iso(i, N)); line(iso(0, i), iso(N, i)); }
+      } else if (style === 'station') {
+        ctx.strokeStyle = T.grid; ctx.globalAlpha = 0.3;
+        for (let i = 3; i < N; i += 3) { line(iso(i, 0), iso(i, N)); line(iso(0, i), iso(N, i)); }
+        ctx.globalAlpha = 0.45; ctx.fillStyle = T.a2(0.6);
+        for (let i = 3; i < N; i += 3) for (let k = 3; k < N; k += 3) { const [x, y] = iso(i, k); ctx.fillRect(x - 0.8, y - 0.8, 1.6, 1.6); }
+      } else if (style === 'trading') {
+        ctx.strokeStyle = T.a(0.5); ctx.globalAlpha = 0.25;
+        for (let i = 3; i < N; i += 3) line(iso(0, i), iso(N, i));
+      } else {
+        ctx.globalAlpha = 0.18; ctx.strokeStyle = T.grid;
+        for (let i = 2; i < N; i += 2) { line(iso(i, 0), iso(i, N)); line(iso(0, i), iso(N, i)); }
       }
       ctx.globalAlpha = 1;
+    }
+    // decoration painted on the walls above the media cards
+    function wallQuad(wall, s0, s1, z0, z1, fill, stroke, lw = 1) { poly([wallBasis(wall, s0, z0), wallBasis(wall, s1, z0), wallBasis(wall, s1, z1), wallBasis(wall, s0, z1)], fill, stroke, lw); }
+    function drawWallDecor() {
+      for (const wall of ['left', 'right']) {
+        if (style === 'trading') {
+          wallQuad(wall, 0.3, N - 0.3, 5.15, 5.95, '#020203', T.a(0.6));
+          const txt = (ticker || `${headL}     ${headR}`).toUpperCase() + '     ';
+          ctx.save(); ctx.beginPath(); const q = [wallBasis(wall, 0.3, 5.15), wallBasis(wall, N - 0.3, 5.15), wallBasis(wall, N - 0.3, 5.95), wallBasis(wall, 0.3, 5.95)]; q.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.clip();
+          const off = ((t * 1.6) % 14);
+          for (let k = -1; k < 3; k++) wallText(txt, wall, 0.5 + k * 14 - off, 5.55, OK, 9);
+          ctx.restore();
+        } else if (style === 'studio') {
+          for (let i = 0; i < 22; i++) for (let j = 0; j < 2; j++) { const s0 = 0.4 + i * 1.06, z0 = 5.05 + j * 0.72; wallQuad(wall, s0, s0 + 0.98, z0, z0 + 0.66, (i + j) % 2 ? 'hsl(0 0% 9%)' : 'hsl(0 0% 6%)', 'rgba(0,0,0,.6)'); }
+          if (wall === 'right') { wallQuad(wall, N - 4.6, N - 1.2, 3.3, 4.3, Math.sin(t * 2) > -0.6 ? 'hsl(0 90% 45%)' : 'hsl(0 50% 18%)', '#ff6b6b', 1.4); wallText('ON AIR', wall, N - 4.0, 3.8, '#fff', 11); }
+        } else if (style === 'lab') {
+          for (let i = 0; i <= N; i += 2.4) { ctx.strokeStyle = T.a2(0.3); ctx.lineWidth = 1; line(wallBasis(wall, i, 0), wallBasis(wall, i, WALL_H)); }
+          wallQuad(wall, 0.2, N - 0.2, 5.1, 6.2, T.a(0.06), T.a2(0.25));
+        } else if (style === 'workshop') {
+          wallQuad(wall, 0.3, N - 0.3, 5.05, 6.3, `hsl(${T.hue} 8% 12%)`, T.a(0.3));
+          ctx.fillStyle = 'rgba(0,0,0,.6)'; for (let i = 0.6; i < N - 0.4; i += 0.5) for (let z = 5.25; z < 6.2; z += 0.3) { const [x, y] = wallBasis(wall, i, z); ctx.fillRect(x - 0.9, y - 0.9, 1.8, 1.8); }
+          for (let i = 0.3; i < N - 0.6; i += 0.9) wallQuad(wall, i, i + 0.45, 0, 0.35, '#ffc247', null), wallQuad(wall, i + 0.45, i + 0.9, 0, 0.35, '#111', null);
+        } else if (style === 'station') {
+          for (let i = 0; i < 4; i++) {
+            const s0 = 1 + i * 5.7, s1 = s0 + 4.6;
+            wallQuad(wall, s0, s1, 5.0, 6.4, '#01020a', T.a(0.7), 1.4);
+            ctx.fillStyle = '#fff';
+            for (let k = 0; k < 14; k++) { const ss = s0 + ((k * 0.37 + i * 0.9 + t * 0.05 * (k % 3 + 1)) % 1) * (s1 - s0), zz = 5.1 + ((k * 0.61) % 1) * 1.2; const [x, y] = wallBasis(wall, ss, zz); ctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(t + k)); ctx.fillRect(x, y, k % 5 ? 1 : 2, k % 5 ? 1 : 2); }
+            ctx.globalAlpha = 1;
+          }
+        }
+      }
     }
     function drawWalls() {
       poly([iso(0, 0), iso(N, 0), iso(N, 0, WALL_H), iso(0, 0, WALL_H)], T.wallR, T.a(0.55), 1.2, 6);
@@ -246,6 +308,7 @@
       for (const [a, b] of [[iso(0, 0, WALL_H), iso(N, 0, WALL_H)], [iso(0, 0, WALL_H), iso(0, N, WALL_H)], [iso(0, 0), iso(0, 0, WALL_H)]]) {
         ctx.strokeStyle = T.neon; ctx.lineWidth = 2; ctx.shadowColor = T.neon; ctx.shadowBlur = 14; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.shadowBlur = 0;
       }
+      drawWallDecor();
       wallText(String(headL).toUpperCase(), 'left', 1.2, WALL_H - 0.55);
       wallText(String(headR).toUpperCase(), 'right', 1.2, WALL_H - 0.55);
       const per = 9, cw = 1.9, gap = 0.55, ch = 3.2;
@@ -259,11 +322,11 @@
       }
     }
     function wallBasis(wall, s, z) { return wall === 'right' ? iso(s, 0, z) : iso(0, s, z); }
-    function wallText(text, wall, s, z) {
+    function wallText(text, wall, s, z, color, size) {
       const [x, y] = wallBasis(wall, s, z);
       ctx.save(); ctx.translate(x, y);
       ctx.transform(1, wall === 'right' ? 0.5 : -0.5, 0, 1, 0, 0);
-      ctx.font = '600 10px Michroma, sans-serif'; ctx.fillStyle = T.ink(0.85); ctx.textBaseline = 'middle';
+      ctx.font = `600 ${size || 10}px Michroma, sans-serif`; ctx.fillStyle = color || T.ink(0.85); ctx.textBaseline = 'middle';
       ctx.letterSpacing = '2px'; ctx.fillText(text, wall === 'left' ? -ctx.measureText(text).width : 0, 0); ctx.letterSpacing = '0px';
       ctx.restore();
     }
@@ -322,6 +385,7 @@
       for (let i = 0; i < 3; i++) { ctx.strokeStyle = T.a(0.5 - i * 0.12); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(x, y, 70 + i * 18, 35 + i * 9, 0, 0, 7); ctx.stroke(); }
       ctx.setLineDash([4, 8]); ctx.lineDashOffset = t * (busy ? 30 : 8); ctx.strokeStyle = T.a2(0.6); ctx.beginPath(); ctx.ellipse(x, y, 58, 29, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]);
       const by = y - 46 + Math.sin(t * 1.4) * 3, pulse = busy ? 0.75 + 0.25 * Math.sin(t * 6) : 0.55 + 0.1 * Math.sin(t * 2);
+      if (style !== 'office') { drawHubAlt(x, y, by, pulse, busy); return; }
       const g = ctx.createRadialGradient(x, by, 4, x, by, 70); g.addColorStop(0, T.brainHalo(0.35 * pulse)); g.addColorStop(1, T.a(0));
       ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, by, 72, 50, 0, 0, 7); ctx.fill();
       ctx.save(); ctx.translate(x, by); ctx.strokeStyle = T.brain; ctx.lineWidth = 2; ctx.shadowColor = T.brainGlow; ctx.shadowBlur = 16 * pulse; ctx.globalAlpha = 0.8 + 0.2 * pulse;
@@ -334,6 +398,42 @@
       ctx.restore(); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
       const bg = ctx.createLinearGradient(0, y, 0, by); bg.addColorStop(0, T.a(0.18)); bg.addColorStop(1, T.a(0));
       ctx.fillStyle = bg; ctx.beginPath(); ctx.moveTo(x - 26, y); ctx.lineTo(x + 26, y); ctx.lineTo(x + 40, by); ctx.lineTo(x - 40, by); ctx.closePath(); ctx.fill();
+    }
+    function drawHubAlt(x, y, by, pulse, busy) {
+      const g = ctx.createRadialGradient(x, by, 4, x, by, 70); g.addColorStop(0, T.a2(0.3 * pulse)); g.addColorStop(1, T.a(0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, by, 72, 50, 0, 0, 7); ctx.fill();
+      const bg = ctx.createLinearGradient(0, y, 0, by); bg.addColorStop(0, T.a(0.18)); bg.addColorStop(1, T.a(0));
+      ctx.fillStyle = bg; ctx.beginPath(); ctx.moveTo(x - 26, y); ctx.lineTo(x + 26, y); ctx.lineTo(x + 40, by); ctx.lineTo(x - 40, by); ctx.closePath(); ctx.fill();
+      ctx.save(); ctx.translate(x, by); ctx.strokeStyle = T.neon2; ctx.fillStyle = T.neon2; ctx.lineWidth = 1.6; ctx.shadowColor = T.neon; ctx.shadowBlur = 14 * pulse;
+      const sp = t * (busy ? 1.6 : 0.5);
+      if (style === 'trading' || style === 'station') {
+        // wireframe globe
+        const R = 34; ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.stroke();
+        for (let i = 0; i < 4; i++) { const a = sp + i * Math.PI / 4; ctx.globalAlpha = 0.35 + 0.5 * Math.abs(Math.cos(a)); ctx.beginPath(); ctx.ellipse(0, 0, Math.abs(Math.cos(a)) * R, R, 0, 0, 7); ctx.stroke(); }
+        ctx.globalAlpha = 0.6; for (const k of [-0.5, 0, 0.5]) { ctx.beginPath(); ctx.ellipse(0, k * R, R * Math.sqrt(1 - k * k), 6 * Math.sqrt(1 - k * k), 0, 0, 7); ctx.stroke(); }
+        if (style === 'station') { ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.ellipse(0, 0, R * 1.6, R * 0.45, -0.3, 0, 7); ctx.stroke(); const a = sp * 2; ctx.beginPath(); ctx.arc(Math.cos(a) * R * 1.6 * Math.cos(-0.3) - Math.sin(a) * R * 0.45 * Math.sin(-0.3), Math.cos(a) * R * 1.6 * Math.sin(-0.3) + Math.sin(a) * R * 0.45 * Math.cos(-0.3), 3, 0, 7); ctx.fill(); }
+      } else if (style === 'studio') {
+        // speaker cone + live waveform ring
+        for (let i = 0; i < 3; i++) { ctx.globalAlpha = 0.9 - i * 0.25; ctx.beginPath(); ctx.arc(0, 0, 10 + i * 10 + (busy ? Math.sin(t * 12) * 1.5 : 0), 0, 7); ctx.stroke(); }
+        ctx.globalAlpha = 0.9; ctx.beginPath();
+        for (let i = 0; i <= 64; i++) { const a = i / 64 * Math.PI * 2, r = 40 + Math.sin(i * 1.7 + t * 6) * Math.sin(i * 0.5 + t * 2) * (busy ? 8 : 3); i ? ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r * 0.9) : ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r * 0.9); }
+        ctx.closePath(); ctx.stroke();
+      } else if (style === 'lab') {
+        // rotating double helix
+        for (let i = 0; i <= 26; i++) {
+          const yy = -34 + i * 2.6, a = sp * 2 + i * 0.45, x1 = Math.sin(a) * 18, x2 = -x1, d = Math.cos(a);
+          ctx.globalAlpha = 0.35 + 0.3 * (d + 1); ctx.beginPath(); ctx.arc(x1, yy, 2.2, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(x2, yy, 2.2, 0, 7); ctx.fill();
+          if (i % 2 === 0) { ctx.globalAlpha = 0.3; ctx.beginPath(); ctx.moveTo(x1, yy); ctx.lineTo(x2, yy); ctx.stroke(); }
+        }
+      } else if (style === 'workshop') {
+        // turning gear over a print press
+        const teeth = 12, R = 30;
+        ctx.beginPath();
+        for (let i = 0; i < teeth * 2; i++) { const a = sp + i * Math.PI / teeth, r = i % 2 ? R : R + 7; const a2 = a + Math.PI / teeth; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); ctx.lineTo(Math.cos(a2) * r, Math.sin(a2) * r); }
+        ctx.closePath(); ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, 10, 0, 7); ctx.stroke();
+        for (let i = 0; i < 6; i++) { const a = -sp * 1.5 + i * Math.PI / 3; ctx.beginPath(); ctx.moveTo(Math.cos(a) * 10, Math.sin(a) * 10); ctx.lineTo(Math.cos(a) * R * 0.8, Math.sin(a) * R * 0.8); ctx.stroke(); }
+      }
+      ctx.restore(); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
     }
     function robot(x, y, s, busy, err, bob, faceRed) {
       y += Math.sin(t * (busy ? 6 : 1.6) + bob) * (busy ? 1.4 : 0.8);
@@ -375,6 +475,10 @@
       box(a.u - 0.55, a.u + 0.55, a.v + 0.15, a.v + 0.75, 0, 0.55, T.deskTop, T.deskL, T.deskR, T.a(0.6));
       poly(rectUV(a.u - 0.42, a.u + 0.42, a.v + 0.3, a.v + 0.6, 0.56), busy ? T.a2(0.75) : T.a(0.45), null);
       const [rx, ry] = iso(a.u, a.v - 0.1, 0.3);
+      if (style === 'trading') { const [mx, my] = iso(a.u + 0.45, a.v + 0.35, 0.56); ctx.fillStyle = '#05060a'; ctx.strokeStyle = busy ? T.neon2 : T.a(0.6); ctx.lineWidth = 1; ctx.beginPath(); ctx.rect(mx - 2, my - 13, 14, 11); ctx.fill(); ctx.stroke(); ctx.strokeStyle = OK; ctx.beginPath(); for (let i = 0; i < 6; i++) { const yy = my - 5 - Math.sin(i + t * (busy ? 3 : 0.5)) * 3; i ? ctx.lineTo(mx + i * 2, yy) : ctx.moveTo(mx, yy); } ctx.stroke(); }
+      else if (style === 'studio') { const [mx, my] = iso(a.u - 0.6, a.v + 0.3, 0); ctx.strokeStyle = '#888'; ctx.lineWidth = 1.2; line([mx, my], [mx, my - 20]); line([mx, my - 20], [mx + 6, my - 24]); ctx.fillStyle = busy ? '#ff5a4f' : '#bbb'; ctx.beginPath(); ctx.ellipse(mx + 7, my - 26, 2.5, 3.5, 0.5, 0, 7); ctx.fill(); }
+      else if (style === 'lab') { const [mx, my] = iso(a.u + 0.4, a.v + 0.4, 0.56); ctx.strokeStyle = T.a2(0.8); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(mx - 2, my - 9); ctx.lineTo(mx - 2, my - 5); ctx.lineTo(mx - 5, my); ctx.lineTo(mx + 5, my); ctx.lineTo(mx + 2, my - 5); ctx.lineTo(mx + 2, my - 9); ctx.stroke(); ctx.fillStyle = busy ? OK : T.a(0.6); ctx.fillRect(mx - 4, my - 3, 8, 3); if (busy) { ctx.fillStyle = OK; ctx.beginPath(); ctx.arc(mx, my - 11 - ((t * 8) % 6), 1.2, 0, 7); ctx.fill(); } }
+      else if (style === 'workshop') { const [mx, my] = iso(a.u + 0.35, a.v + 0.45, 0.56); ctx.fillStyle = busy ? '#ffc247' : '#776'; ctx.fillRect(mx - 5, my - 5, 10, 4); ctx.fillStyle = '#f2efe8'; ctx.fillRect(mx - 3, my - 9, 6, 4); }
       robot(rx, ry, 0.85, busy, s.err, s.bob);
       const [px, py] = iso(a.u, a.v, 2.6);
       const [qx, qy] = iso(a.u, a.v - 0.1, 1.4);
@@ -457,7 +561,7 @@
       mediaCount: () => media.filter((m) => m.img).length,
       relayout: () => { fit(); if (!focused) Object.assign(camT, { x: bounds.cx, y: bounds.cy, z: 1 }); },
       highlight: () => {},
-      get AGENTS() { return AGENTS; }, get ZONES() { return ZONES; }, get BASE_AGENTS() { return BASE.agents; },
+      get AGENTS() { return AGENTS; }, get style() { return style; }, get ZONES() { return ZONES; }, get BASE_AGENTS() { return BASE.agents; },
       get busy() { return st.ultron.busy || AGENTS.some((a) => st[a.id]?.busy); },
     };
   }
@@ -489,6 +593,6 @@
     { id: 'mk.publish',  zone: 'publishing', u: 3.2,  v: 9.0,  name: 'Publisher',      icon: 'send' },
     { id: 'mk.community',zone: 'publishing', u: 3.2,  v: 11.8, name: 'Community',      icon: 'chat' },
   ];
-  window.OfficeKit = { create, autoLayout, theme, ICONS: ['doc', 'search', 'radar', 'chart', 'flow', 'cal', 'lines', 'wave', 'palette', 'image', 'film', 'send', 'chat', 'code', 'money', 'mail', 'check', 'grid'] };
+  window.OfficeKit = { create, autoLayout, theme, STYLES, ICONS: ['doc', 'search', 'radar', 'chart', 'flow', 'cal', 'lines', 'wave', 'palette', 'image', 'film', 'send', 'chat', 'code', 'money', 'mail', 'check', 'grid'] };
   window.Office = create({ zones: MK_ZONES, agents: MK_AGENTS, hue: 260, headL: '@yourshop · 0 posts', headR: 'CONTENT LIBRARY' });
 })();
