@@ -1,5 +1,7 @@
 # Kivo Ultron
 
+A suite of AI departments for an Etsy print-on-demand business. **STORE** designs and sells the shirts; **MARKETING** promotes them on Instagram, TikTok and Pinterest. ULTRON runs both.
+
 An autonomous AI commerce station for Windows. Eight Claude-powered agents run an Etsy print-on-demand line from a pixel-art space station:
 
 | Agent | Job |
@@ -38,3 +40,23 @@ It picks the blank tee and print provider for you, switches autopilot on and sta
 
 ## Releasing an update
 Bump `version` in `package.json`, then `GH_TOKEN=… npm run release`. Installed copies pick it up within an hour.
+
+## Marketing department (2.0)
+An isometric marketing floor with 15 agents in 7 zones, plus ULTRON as Chief of Staff:
+- **Research**: Trend Scout, Competitor Watch
+- **Planning**: Strategist, Scheduler
+- **Scripting**: Hook Writer, Caption Writer, Script Writer
+- **Design**: Art Director, Designer (renders 1080×1350 feed posts and 1000×1500 pins)
+- **Editing**: Video Editor (renders 1080×1920 MP4s with ffmpeg; cuts your own footage after watching it), Cover Maker
+- **Publishing**: Publisher (posts on schedule), Community (drafts comment replies)
+- **Analytics**: Analyst (pulls stats), Reporter (weekly summary fed back into planning)
+
+Finished posts show on the office walls. Click any agent to zoom in and watch its work live.
+
+### Connecting accounts
+Each platform needs your own free developer app (Accounts tab walks you through it):
+- **Instagram** (Instagram API with Instagram Login): professional account; redirect `https://tomosmira823-wq.github.io/ULTRON-/oauth/`. Instagram only accepts media from a public link, so add a free Cloudinary cloud name + unsigned upload preset.
+- **TikTok** (Content Posting API, Direct Post): redirect `http://127.0.0.1:53682/callback/tiktok/`. Posts are private until TikTok audits your app. Video only.
+- **Pinterest** (API v5): redirect `http://localhost:53682/callback/pinterest/`. Trial access pins are visible only to you.
+
+Without connected accounts, posts come out as ready-to-post packs (image/video + caption, one-click copy).

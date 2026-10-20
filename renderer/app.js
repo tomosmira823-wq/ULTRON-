@@ -107,20 +107,37 @@
     for (const l of D.log.slice(-250)) {
       if (logFilter && l.agent !== logFilter) continue;
       const ln = el('div', 'ln ' + l.kind);
-      ln.append(el('span', 't', stamp(l.ts) + ' '), el('span', 'a', '[' + l.agent.toUpperCase() + '] '), el('span', 'm', l.msg));
+      ln.append(el('span', 't', stamp(l.ts) + ' '), el('span', 'a', '[' + nameOf(l.agent) + '] '), el('span', 'm', l.msg));
       box.append(ln);
     }
     if (atBottom) box.scrollTop = box.scrollHeight;
   }
 
+  const nameOf = (id) => (AGENTS.find((a) => a.id === id)?.name || window.Office?.AGENTS.find((a) => a.id === id)?.name || id).toUpperCase();
+  const dept = () => D.ui.dept || 'store';
   function setAgent(id, status, text, err) {
     agentState[id] = { status, text: text || '', err: !!err };
-    Station.setBusy(id, status === 'WORKING', text || '', err);
+    if (id.startsWith('mk.') || id === 'ultron') window.Office?.setBusy(id, status === 'WORKING', text || '', err);
+    if (!id.startsWith('mk.')) Station.setBusy(id, status === 'WORKING', text || '', err);
     if (id === 'ultron') Core.setActive(status === 'WORKING');
     renderRoster(); feedTouch(id); if (feedAgent === 'ultron') feedTouch('ultron'); if (running) renderControls();
   }
   function renderRoster() {
     const ul = $('#roster'); ul.textContent = '';
+    if (dept() === 'marketing' && window.MK) {
+      const list = [{ id: 'ultron', name: 'ULTRON', zone: 'chief' }, ...Office.AGENTS];
+      let zone = '';
+      for (const a of list) {
+        if (a.zone !== zone) { zone = a.zone; ul.append(el('li', 'zone-h', zone === 'chief' ? 'CHIEF OF STAFF' : zone.toUpperCase())); }
+        const s = agentState[a.id] || { status: keys.anthropic ? 'IDLE' : 'OFFLINE' };
+        const li = el('li', (s.status === 'WORKING' ? 'busy ' : '') + (feedAgent === a.id ? 'sel' : ''));
+        li.append(el('span', 'led ' + (s.err ? 'err' : s.status === 'WORKING' ? 'busy' : 'on')), el('span', 'nm', a.name.toUpperCase()), el('span', 'st', s.err ? 'FAULT' : s.status || 'IDLE'));
+        li.append(el('span', 'rl', s.status === 'WORKING' && s.text ? s.text : MK.ROLE[a.id] || ''));
+        if (MK.AI.has(a.id)) li.append(el('span', 'cost', `${modelName(modelFor(a.id)).split(' ')[0]} · ${usd(costOf(a.id))} today`));
+        li.onclick = () => selectAgent(a.id); ul.append(li);
+      }
+      return;
+    }
     for (const a of AGENTS) {
       const s = agentState[a.id] || { status: 'IDLE' };
       const li = el('li', (s.status === 'WORKING' ? 'busy ' : '') + (logFilter === a.id ? 'sel' : ''));
@@ -135,14 +152,15 @@
   function selectAgent(id) {
     const next = id && feedAgent !== id ? id : null;
     feedAgent = next; logFilter = next;
-    Station.focus(next); Station.highlight(next);
+    if (dept() === 'marketing') { Office.focus(next); Office.highlight(next); }
+    else { Station.focus(next); Station.highlight(next); }
     renderRoster(); renderLog(); renderFeed(true);
   }
 
   // ---------- Claude ----------
   const live = {}, reqAgent = {}; let reqSeq = 0;
   const cleanErr = (e) => String(e?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
-  async function ask(prompt, { fast = false, maxTokens = 4000, agent = null, task = '', model: forceModel = null } = {}) {
+  async function ask(prompt, { fast = false, maxTokens = 4000, agent = null, task = '', model: forceModel = null, images = null } = {}) {
     if (!keys.anthropic) throw new Error('Add your Anthropic API key in Settings.');
     rollDay();
     if (D.settings.spendCap && (D.day.usd || 0) >= D.settings.spendCap) throw new Error(`Daily spend cap of $${D.settings.spendCap} reached — raise it in Settings or wait until tomorrow.`);
@@ -151,7 +169,7 @@
     if (agent) { live[agent] = { task, text: '', busy: true, at: Date.now() }; reqAgent[reqId] = agent; feedTouch(agent); }
     try {
       let r;
-    try { r = await kivo.ask({ prompt, model, maxTokens, stream: !!agent, reqId }); }
+    try { r = await kivo.ask({ prompt, model, maxTokens, stream: !!agent, reqId, images }); }
     catch (e) { const m = cleanErr(e); throw new Error(/ABORTED/.test(m) ? 'ABORTED' : m); }
       if (agent) live[agent].text = r.text;
       D.day.tokens += (r.usage.input_tokens || 0) + (r.usage.output_tokens || 0);
@@ -733,7 +751,7 @@ Reply with JSON only, issues kept under 12 words each, at most 5 issues: {"score
     for (const p of D.products) by[p.status] = (by[p.status] || 0) + 1;
     const sales = D.orders.reduce((a, o) => a + o.sales, 0);
     const top = D.products.filter((p) => p.sales?.qty).sort((a, b) => b.sales.qty - a.sales.qty).slice(0, 5).map((p) => `${p.trend.phrase} (${p.sales.qty})`).join(', ');
-    return `${now} Queued missions: ${missionQueue.length ? missionQueue.map((j) => j.n + ' designs').join(', ') : 'none'}.
+    return `${window.MK ? MK.summary() + '\n' : ''}${now} Queued missions: ${missionQueue.length ? missionQueue.map((j) => j.n + ' designs').join(', ') : 'none'}.
 Template: ${tpl().name}. Mode: ${MODES[s.mode]}. Autopilot: ${s.auto ? `on, every ${s.hours}h, ${s.acount} per run, max ${s.maxPerDay}/day` : 'off'}. QA bar ${s.qaMin}. Printify: ${keys.printify ? (s.shopId ? 'connected to ' + s.shopTitle : 'token set, no shop') : 'not connected'}. Product: ${s.blueprintTitle || 'none'} in ${s.colours}. Agent models: ${AI_AGENTS.map((a) => `${a} ${modelName(modelFor(a))}`).join(', ')}. AI spend today ${usd(D.day.usd || 0)} (${AI_AGENTS.map((a) => `${a} ${usd(costOf(a))}`).join(', ')}); all time ${usd(Object.values(D.cost?.all || {}).reduce((s, x) => s + x.usd, 0))}.
 Products by status: ${JSON.stringify(by)}. Designs today: ${D.day.designs}. Orders: ${D.orders.length}, sales ${money(sales)}, profit ${money(D.orders.reduce((a, o) => a + orderProfit(o), 0))}. Best sellers: ${top || 'none yet'}.
 ${salesInsight()}
@@ -755,6 +773,7 @@ Conversation:
 ${hist}
 Available actions (use only when the owner asks for them or clearly wants them):
 - {"type":"mission","brief":"...","count":1-25,"tone":"light"|"dark"} start designing now (if a mission is already running it is queued and starts automatically afterwards)
+- {"type":"campaign","brief":"...","count":1-20} start a MARKETING run: the marketing crew makes social posts (Instagram, TikTok, Pinterest) promoting the shop's designs
 - {"type":"autopilot","on":true|false}
 - {"type":"set","field":"mode"|"hours"|"acount"|"maxPerDay"|"qaMin"|"defaultBrief"|"colours","value":...}  mode is "auto","review" or "design"
 - {"type":"sync"} pull orders and sales now
@@ -766,10 +785,12 @@ Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}
       renderChat();
       const acts = Array.isArray(r.actions) ? r.actions : r.actions ? [r.actions] : r.action ? [r.action] : [];
       let started = false;
-      for (const a of acts) { if ((await doAction(a)) === 'mission') started = true; }
+      for (const a of acts) { const r2 = await doAction(a); if (r2 === 'mission' || r2 === 'campaign') started = true; }
       // safety net: the owner clearly asked for designs but no mission came back
       const want = msg.match(/\b(make|create|design|do|run|generate|give me|knock out|start)\b[^.?!]*?\b(\d{1,2})\b[^.?!]*?\b(designs?|shirts?|tees?|t-?shirts?|products?|listings?)\b/i);
-      if (!started && want) await doAction({ type: 'mission', count: Number(want[2]), brief: msg });
+      const wantMk = /\b(posts?|reels?|tiktoks?|pins?|campaign|marketing|social)\b/i.test(msg) && msg.match(/\b(\d{1,2})\b/);
+      if (!started && wantMk && /\b(make|create|do|run|generate|give me|start)\b/i.test(msg)) await doAction({ type: 'campaign', count: Number(wantMk[1]), brief: msg });
+      else if (!started && want) await doAction({ type: 'mission', count: Number(want[2]), brief: msg });
     } catch (e) { D.chat.push({ role: 'ultron', text: 'Comms error: ' + e.message, ts: Date.now(), err: true }); renderChat(); }
     $('#chat-send').disabled = false;
     setAgent('ultron', running ? 'WORKING' : 'IDLE');
@@ -780,7 +801,8 @@ Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}
     if (!a || typeof a !== 'object') return {};
     const p = { ...a, ...(a.params || a.args || a.parameters || a.data || {}) };
     let t = String(a.type || a.action || a.name || a.command || a.tool || '').toLowerCase().replace(/[^a-z]/g, '');
-    if (/mission|design|create|make|generate|produce/.test(t)) t = 'mission';
+    if (/campaign|marketing|social|post|content|reel|tiktok|instagram|pinterest/.test(t)) t = 'campaign';
+    else if (/mission|design|create|make|generate|produce/.test(t)) t = 'mission';
     else if (/autopilot/.test(t)) t = 'autopilot';
     else if (/model/.test(t)) t = 'model';
     else if (/sync|order/.test(t)) t = 'sync';
@@ -816,6 +838,14 @@ Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}
       const who = a.agent === 'all' ? AI_AGENTS : AI_AGENTS.includes(a.agent) ? [a.agent] : [];
       for (const ag of who) setAgentModel(ag, m, true);
       if (who.length) note(`▶ ${a.agent === 'all' ? 'All agents' : a.agent.toUpperCase()} now on ${modelName(m)}`);
+    }
+    else if (a.type === 'campaign') {
+      if (!window.MK) return;
+      if (MK.running) return note('A marketing run is already going.');
+      const n = Math.max(1, Math.min(20, Number(a.count) || MK.M().settings.perRun));
+      note(`▶ Marketing run started: ${n} posts`); setDept('marketing');
+      MK.runCampaign(String(a.brief || MK.M().settings.brief), n);
+      return 'campaign';
     }
     else if (!a.type) { note('⚠ ULTRON sent an action the app didn’t understand: ' + JSON.stringify(raw).slice(0, 120)); }
     else if (a.type === 'show') { $('#filter').value = ['review', 'published', 'ready', 'failed'].includes(a.status) ? a.status : 'all'; showTab('pipeline'); renderPipeline(); }
@@ -1051,6 +1081,7 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
   function renderFeed(full) {
     const box = $('#feed');
     if (!feedAgent) { box.hidden = true; box.dataset.agent = ''; return; }
+    if (dept() === 'marketing' && window.MK) { MK.renderFeed(box, feedAgent, live[feedAgent], full); return; }
     const a = AGENTS.find((x) => x.id === feedAgent), st = agentState[feedAgent] || {}, L = live[feedAgent];
     if (full || box.dataset.agent !== feedAgent) {
       box.dataset.agent = feedAgent; box.hidden = false; box.textContent = '';
@@ -1703,10 +1734,29 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     log('ultron', 'Stop requested — cancelling the current job' + (q ? ` and ${q} queued mission(s)` : '') + '.', 'err');
     renderControls();
   }
+  function setDept(d) {
+    if (!['store', 'marketing'].includes(d)) d = 'store';
+    D.ui.dept = d; persist();
+    document.querySelectorAll('.dept').forEach((b) => b.classList.toggle('on', b.dataset.dept === d));
+    document.body.dataset.dept = d;
+    const mk = d === 'marketing';
+    $('#station').hidden = mk; $('#room-labels').hidden = mk; $('#office').hidden = !mk; Office.show(mk);
+    $('#map-title').textContent = mk ? 'MARKETING FLOOR' : 'STATION MAP';
+    $('#mission-chip').hidden = mk;
+    $('#readouts').hidden = mk; $('#readouts-mk').hidden = !mk;
+    $('#brief-store').hidden = mk; $('#brief-mk').hidden = !mk;
+    $('#term-store').hidden = mk; $('#term-mk').hidden = !mk;
+    $('#cmd-template').textContent = mk ? (MK.M().settings.handle || 'Marketing') : (D.settings.shopName || tpl().name);
+    $('#cmd-mode').textContent = mk ? { auto: 'AUTO-POST', review: 'REVIEW FIRST', make: 'MAKE ONLY' }[MK.M().settings.mode] : MODES[D.settings.mode];
+    if (feedAgent) selectAgent(null);
+    renderRoster(); if (mk) MK.renderAll(); else renderAll();
+    requestAnimationFrame(() => { Station.relayout(); Office.relayout(); });
+  }
   function saveUI() { D.ui = { ...D.ui, brief: $('#brief').value, count: +$('#count').value || 3, tone: $('#tone').value }; persist(); }
 
   // ---------- boot ----------
   async function boot() {
+    if (document.readyState === 'loading') await new Promise((r) => document.addEventListener('DOMContentLoaded', r, { once: true }));
     const saved = await kivo.load();
     if (saved && saved.products) {
       D = { ...D, ...saved, settings: { ...DEFAULTS, ...(saved.settings || {}), agentModels: { ...DEFAULTS.agentModels, ...(saved.settings?.agentModels || {}) } }, ui: { ...D.ui, ...(saved.ui || {}) }, day: saved.day || D.day, history: saved.history || {}, chat: saved.chat || [] };
@@ -1729,14 +1779,23 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     $('#brief').value = D.ui.brief || D.settings.defaultBrief || tpl().brief;
     $('#count').value = D.ui.count; $('#tone').value = D.ui.tone || tpl().tone; $('#mode').value = D.settings.mode;
     Station.init($('#station'), $('#room-labels'), selectAgent);
+    Office.init($('#office'), selectAgent);
     Core.init($('#core'));
     wire();
     for (const a of AGENTS) agentState[a.id] = { status: keys.anthropic ? 'IDLE' : 'OFFLINE' };
+    await SOCIAL.load(); MK.init();
+    document.querySelectorAll('.dept:not(.soon)').forEach((b) => (b.onclick = () => setDept(b.dataset.dept)));
     renderRoster(); renderLog(); renderChat(); renderAll();
+    setDept(D.ui.dept || 'store');
     const ver = await kivo.version?.(); if (ver) $('#s-ver').textContent = 'Kivo Ultron v' + ver;
     if (!keys.anthropic || !D.setupDone) setTimeout(() => openWizard(keys.anthropic ? 2 : 1), 500);
     else log('ultron', 'Station online. ' + needs().filter((n) => n.level === 'warn' || n.level === 'bad').length + ' things need you.', 'ok');
     setInterval(autoTick, 30000); setTimeout(autoTick, 4000);
   }
+  window.KU = {
+    get D() { return D; }, get keys() { return keys; }, get feedAgent() { return feedAgent; },
+    ask, askJSON, log, persist, toast, notify, setAgent, agentState, live, money, usd, svgURL, svgToPNG, shopContext, calendarText,
+    tpl, modelFor, setAgentModel, MODEL_CHOICES, modelName, costOf, stamp, fatal, cleanErr, feedTouch, selectAgent, renderReadouts, setDept,
+  };
   boot();
 })();

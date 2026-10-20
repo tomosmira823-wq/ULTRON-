@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('kivo', {
   min: () => ipcRenderer.send('win:min'),
   max: () => ipcRenderer.send('win:max'),
@@ -22,5 +22,20 @@ contextBridge.exposeInMainWorld('kivo', {
   notify: (title, body) => ipcRenderer.send('notify', { title, body }),
   onDelta: (fn) => ipcRenderer.on('claude:delta', (_e, v) => fn(v)),
   cancelAll: () => ipcRenderer.send('claude:cancelAll'),
+  mediaSave: (o) => ipcRenderer.invoke('media:save', o),
+  mediaRead: (f) => ipcRenderer.invoke('media:read', f),
+  mediaSize: (f) => ipcRenderer.invoke('media:size', f),
+  fetchImage: (u) => ipcRenderer.invoke('net:image', u),
+  videoSlides: (o) => ipcRenderer.invoke('video:slides', o),
+  videoPick: () => ipcRenderer.invoke('video:pick'),
+  videoFrames: (o) => ipcRenderer.invoke('video:frames', o),
+  videoEdit: (o) => ipcRenderer.invoke('video:edit', o),
+  pathOf: (file) => { try { return webUtils.getPathForFile(file); } catch { return ''; } },
+  socialGet: () => ipcRenderer.invoke('social:get'),
+  socialSet: (p) => ipcRenderer.invoke('social:set', p),
+  socialReq: (o) => ipcRenderer.invoke('social:req', o),
+  socialHost: (o) => ipcRenderer.invoke('social:host', o),
+  oauthStart: (o) => ipcRenderer.invoke('oauth:start', o),
+  oauthPkce: () => ipcRenderer.invoke('oauth:pkce'),
   openUrl: (u) => ipcRenderer.send('open:url', u),
 });

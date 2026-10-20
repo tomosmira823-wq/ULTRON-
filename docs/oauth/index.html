@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kivo Ultron sign-in</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0d0c;color:#c9f7dc;font:16px system-ui,sans-serif}main{max-width:520px;padding:24px}h1{color:#46ff9a;font-size:22px}a{color:#46ff9a}code{word-break:break-all;background:#000;padding:2px 6px;border-radius:3px}</style></head>
+<body><main><h1>Finishing sign-in…</h1><p id="m">Sending you back to Kivo Ultron on this computer.</p><p id="f" hidden>If nothing happens, make sure Kivo Ultron is open, then <a id="l" href="#">click here</a>.</p></main>
+<script>
+// Instagram only allows HTTPS redirects, so this page passes the sign-in code to Kivo Ultron's local listener.
+(function () {
+  var q = location.search || '';
+  var target = 'http://127.0.0.1:53682/callback/instagram/' + q;
+  document.getElementById('l').href = target;
+  setTimeout(function () { document.getElementById('f').hidden = false; }, 2500);
+  location.replace(target);
+})();
+</script></body></html>

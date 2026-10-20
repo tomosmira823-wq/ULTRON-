@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self'; media-src 'self' blob: data:">
 <title>Kivo Ultron</title>
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -15,6 +15,11 @@
       <span class="wordmark">KIVO</span>
       <span class="sub">ULTRON&nbsp;/&nbsp;AUTONOMOUS COMMERCE STATION</span>
     </div>
+    <nav class="depts" id="depts" aria-label="Departments">
+      <button class="dept on" data-dept="store">STORE</button>
+      <button class="dept" data-dept="marketing">MARKETING</button>
+      <button class="dept soon" disabled title="Coming next: Customer Service, Finance">+ MORE SOON</button>
+    </nav>
     <div class="readouts" id="readouts">
       <div class="ro"><label>SALES</label><b id="ro-sales">—</b></div>
       <div class="ro"><label>PROFIT</label><b id="ro-profit">—</b></div>
@@ -22,6 +27,13 @@
       <div class="ro"><label>LIVE</label><b id="ro-live">0</b></div>
       <div class="ro"><label>TODAY</label><b id="ro-today">0</b></div>
       <div class="ro"><label>CREW</label><b id="ro-agents">—</b></div>
+    </div>
+    <div class="readouts" id="readouts-mk" hidden>
+      <div class="ro"><label>SCHEDULED</label><b id="mk-ro-sched">0</b></div>
+      <div class="ro"><label>POSTED</label><b id="mk-ro-posted">0</b></div>
+      <div class="ro"><label>VIEWS</label><b id="mk-ro-views">0</b></div>
+      <div class="ro"><label>LIKES</label><b id="mk-ro-likes">0</b></div>
+      <div class="ro"><label>TO REVIEW</label><b id="mk-ro-review">0</b></div>
     </div>
     <div class="winctl">
       <button id="btn-update" class="upd" hidden>UPDATE READY · RESTART</button>
@@ -49,13 +61,14 @@
 
     <section class="station-wrap metal panel screws">
       <div class="station-head">
-        <h2 class="engr">STATION MAP</h2>
+        <h2 class="engr" id="map-title">STATION MAP</h2>
         <div class="mission-chip" id="mission-chip">NO ACTIVE MISSION</div>
         <span class="tiny dim map-hint">scroll to zoom · drag to move · click an agent</span>
         <button class="hw-btn" id="btn-expand" title="Expand the map (F)">⤢ EXPAND</button>
       </div>
       <div class="glass station-glass">
         <canvas id="station" width="640" height="360"></canvas>
+        <canvas id="office" hidden></canvas>
         <div id="room-labels"></div>
         <div id="feed" class="feed" hidden></div>
         <div class="scan"></div>
@@ -81,6 +94,7 @@
       </nav>
 
       <div class="cpane" id="cp-brief">
+       <div id="brief-store">
         <div class="glass needs" id="needs"></div>
         <label class="lbl" for="brief">MISSION BRIEF</label>
         <textarea id="brief" rows="3" spellcheck="false"></textarea>
@@ -108,6 +122,42 @@
           <span class="switch"><input type="checkbox" id="auto-switch"><i></i></span>
           <span class="auto-txt"><b>AUTOPILOT</b><span id="auto-desc">Off · the crew only works when you press Run</span></span>
         </label>
+       </div>
+       <div id="brief-mk" hidden>
+        <div class="glass needs" id="mk-needs"></div>
+        <label class="lbl" for="mk-brief">CAMPAIGN BRIEF</label>
+        <textarea id="mk-brief" rows="3" spellcheck="false"></textarea>
+        <div class="row">
+          <div class="field">
+            <label class="lbl" for="mk-count">POSTS</label>
+            <div class="stepper"><button id="mk-cdn" aria-label="Fewer">−</button><input id="mk-count" type="number" min="1" max="20" value="6"><button id="mk-cup" aria-label="More">+</button></div>
+          </div>
+          <div class="field">
+            <label class="lbl" for="mk-handle">YOUR HANDLE</label>
+            <input id="mk-handle" type="text" placeholder="@yourshop">
+          </div>
+        </div>
+        <div class="lbl">PLATFORMS</div>
+        <div class="plat-row">
+          <label class="pchip" style="--pc:#ff4fa3"><input type="checkbox" id="mk-pl-instagram"><span>Instagram</span></label>
+          <label class="pchip" style="--pc:#25f4ee"><input type="checkbox" id="mk-pl-tiktok"><span>TikTok</span></label>
+          <label class="pchip" style="--pc:#e60023"><input type="checkbox" id="mk-pl-pinterest"><span>Pinterest</span></label>
+        </div>
+        <label class="lbl" for="mk-mode">WHEN POSTS ARE READY</label>
+        <select id="mk-mode">
+          <option value="auto">Auto-post on schedule</option>
+          <option value="review">Review first · I approve each post</option>
+          <option value="make">Make only · I’ll post them myself</option>
+        </select>
+        <div class="mc">
+          <button class="mc-run mk" id="mk-run">▶ RUN CAMPAIGN</button>
+          <div class="mc-status" id="mk-status"></div>
+        </div>
+        <label class="auto-row" for="mk-auto">
+          <span class="switch"><input type="checkbox" id="mk-auto"><i></i></span>
+          <span class="auto-txt"><b>MARKETING AUTOPILOT</b><span id="mk-auto-desc">Off</span></span>
+        </label>
+       </div>
       </div>
 
       <div class="cpane" id="cp-chat" hidden>
@@ -126,6 +176,7 @@
 
     <section class="terminal metal panel screws">
       <div class="term-resize" id="term-resize" title="Drag to resize"></div>
+     <div id="term-store" class="term-inner">
       <div class="term-head">
         <h2 class="engr">ETSY PRODUCTION TERMINAL</h2>
         <nav class="tabs">
@@ -160,6 +211,22 @@
           </div>
         </div>
       </div>
+     </div>
+     <div id="term-mk" class="term-inner" hidden>
+      <div class="term-head">
+        <h2 class="engr">CONTENT STUDIO</h2>
+        <nav class="tabs" id="mk-tabs">
+          <button class="tab on" data-mk="content">CONTENT</button>
+          <button class="tab" data-mk="calendar">CALENDAR</button>
+          <button class="tab" data-mk="edit">EDIT STUDIO</button>
+          <button class="tab" data-mk="accounts">ACCOUNTS</button>
+          <button class="tab" data-mk="results">RESULTS</button>
+          <button class="tab" data-mk="community">COMMUNITY</button>
+        </nav>
+        <div class="term-actions"><button class="pclose" data-panel="term" title="Close">✕</button></div>
+      </div>
+      <div class="glass term-body"><div class="mk-body" id="mk-body"></div></div>
+     </div>
     </section>
   </main>
 </div>
@@ -354,8 +421,17 @@
 </div>
 
 <div id="toast" hidden></div>
+<div class="overlay" id="mk-drawer" hidden>
+  <div class="sheet metal screws">
+    <div class="sheet-head"><h2 class="engr" id="mk-drawer-title">POST</h2><button class="wc close" id="mk-drawer-close" aria-label="Close">&#x2715;</button></div>
+    <div class="sheet-body drawer-grid" id="mk-drawer-body"></div>
+  </div>
+</div>
 <script src="templates.js"></script>
 <script src="station.js"></script>
+<script src="office.js"></script>
 <script src="app.js"></script>
+<script src="social.js"></script>
+<script src="marketing.js"></script>
 </body>
 </html>
