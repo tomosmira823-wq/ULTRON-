@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('kivo', {
   notify: (title, body) => ipcRenderer.send('notify', { title, body }),
   onDelta: (fn) => ipcRenderer.on('claude:delta', (_e, v) => fn(v)),
   cancelAll: () => ipcRenderer.send('claude:cancelAll'),
+  cancelReq: (ids) => ipcRenderer.send('claude:cancel', ids),
   mediaSave: (o) => ipcRenderer.invoke('media:save', o),
   mediaRead: (f) => ipcRenderer.invoke('media:read', f),
   mediaSize: (f) => ipcRenderer.invoke('media:size', f),
@@ -38,4 +39,5 @@ contextBridge.exposeInMainWorld('kivo', {
   oauthStart: (o) => ipcRenderer.invoke('oauth:start', o),
   oauthPkce: () => ipcRenderer.invoke('oauth:pkce'),
   openUrl: (u) => ipcRenderer.send('open:url', u),
+  openFile: (o) => ipcRenderer.invoke('file:open', o),
 });

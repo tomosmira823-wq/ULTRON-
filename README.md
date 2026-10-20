@@ -1,6 +1,17 @@
 # Kivo Ultron
 
-A suite of AI departments for an Etsy print-on-demand business. **STORE** designs and sells the shirts; **MARKETING** promotes them on Instagram, TikTok and Pinterest. ULTRON runs both.
+A suite of AI departments ("spaces"). **STORE** designs and sells Etsy print-on-demand shirts; **MARKETING** promotes them on Instagram, TikTok and Pinterest; and you can **build your own spaces** with their own teams of bots. ULTRON runs them all.
+
+## Spaces (2.1)
+- **+ SPACE** in the title bar opens the Space Builder. Start from a template (Sales Team, YouTube Studio, Research Lab, Finance Desk, Trading Research, Customer Service, Dev Team, Life Admin, Product Lab) or a blank space, or describe what it's for and press **Design the team**.
+- Each space gets its own isometric office floor in its own colour, with up to 18 bots at desks. Click any bot to watch it work live.
+- Bots run in order, each building on the work before it. ULTRON plans each job and gives every bot its instruction.
+- Per bot: name, team, job, Claude model, and tools: **web search** (Claude's server-side web search, about 1p per search), store data, marketing data, and past outputs. Tick **I approve its work** to pause the run for your OK or a redo with a note.
+- Finished outputs land in the terminal (formatted, copy or save as Markdown) and hang on the office walls. Each space can run on autopilot every N hours.
+- **Hire bots into Store or Marketing** too: they get desks (6 in the Store's NEW HIRES annex, 5 on the Marketing floor), review every mission or campaign, and their notes feed into the next run.
+- Tell ULTRON in chat: "hire me 2 bots to check my prices", "build me a sales team", "run the sales team on barbers in Knutsford".
+- Export a space to a `.kivo-space.json` file and import it on another PC.
+- Trading Research is research and a paper-trade journal only: it never places real trades and isn't financial advice.
 
 An autonomous AI commerce station for Windows. Eight Claude-powered agents run an Etsy print-on-demand line from a pixel-art space station:
 

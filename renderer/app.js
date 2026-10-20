@@ -36,7 +36,7 @@
   }
   const usd = (n) => '$' + (n < 0.01 && n > 0 ? n.toFixed(4) : n < 1 ? n.toFixed(3) : n.toFixed(2));
   function recordCost(agent, model, u) {
-    const inT = u.input_tokens || 0, outT = u.output_tokens || 0, c = priceOf(model, inT, outT), a = agent || 'other';
+    const inT = u.input_tokens || 0, outT = u.output_tokens || 0, c = priceOf(model, inT, outT) + (u.searches || 0) * 0.01, a = agent || 'other';
     rollDay();
     D.cost = D.cost || { all: {}, today: {} };
     for (const bucket of [D.cost.all, D.cost.today]) { const x = bucket[a] = bucket[a] || { usd: 0, calls: 0, in: 0, out: 0 }; x.usd += c; x.calls++; x.in += inT; x.out += outT; }
@@ -113,19 +113,21 @@
     if (atBottom) box.scrollTop = box.scrollHeight;
   }
 
-  const nameOf = (id) => (AGENTS.find((a) => a.id === id)?.name || window.Office?.AGENTS.find((a) => a.id === id)?.name || id).toUpperCase();
+  const nameOf = (id) => (AGENTS.find((a) => a.id === id)?.name || window.Office?.AGENTS.find((a) => a.id === id)?.name || window.SP?.nameOf(id) || id).toUpperCase();
   const dept = () => D.ui.dept || 'store';
   function setAgent(id, status, text, err) {
     agentState[id] = { status, text: text || '', err: !!err };
+    if (id.startsWith('sp.') || id === 'ultron') window.SP?.setBusy(id, status === 'WORKING', text || '', err);
     if (id.startsWith('mk.') || id === 'ultron') window.Office?.setBusy(id, status === 'WORKING', text || '', err);
-    if (!id.startsWith('mk.')) Station.setBusy(id, status === 'WORKING', text || '', err);
+    if (!id.startsWith('mk.') && !id.startsWith('sp.')) Station.setBusy(id, status === 'WORKING', text || '', err);
     if (id === 'ultron') Core.setActive(status === 'WORKING');
     renderRoster(); feedTouch(id); if (feedAgent === 'ultron') feedTouch('ultron'); if (running) renderControls();
   }
   function renderRoster() {
     const ul = $('#roster'); ul.textContent = '';
+    if (window.SP?.get(dept())) { SP.renderRoster(ul); return; }
     if (dept() === 'marketing' && window.MK) {
-      const list = [{ id: 'ultron', name: 'ULTRON', zone: 'chief' }, ...Office.AGENTS];
+      const list = [{ id: 'ultron', name: 'ULTRON', zone: 'chief' }, ...Office.BASE_AGENTS];
       let zone = '';
       for (const a of list) {
         if (a.zone !== zone) { zone = a.zone; ul.append(el('li', 'zone-h', zone === 'chief' ? 'CHIEF OF STAFF' : zone.toUpperCase())); }
@@ -136,6 +138,7 @@
         if (MK.AI.has(a.id)) li.append(el('span', 'cost', `${modelName(modelFor(a.id)).split(' ')[0]} · ${usd(costOf(a.id))} today`));
         li.onclick = () => selectAgent(a.id); ul.append(li);
       }
+      window.SP?.rosterHires(ul, 'marketing');
       return;
     }
     for (const a of AGENTS) {
@@ -148,11 +151,14 @@
       li.onclick = () => selectAgent(a.id);
       ul.append(li);
     }
+    window.SP?.rosterHires(ul, 'store');
   }
   function selectAgent(id) {
+    if (id === 'hire') { SP.openHire(dept()); return; }
     const next = id && feedAgent !== id ? id : null;
     feedAgent = next; logFilter = next;
-    if (dept() === 'marketing') { Office.focus(next); Office.highlight(next); }
+    if (SP.get(dept())) SP.focus(next);
+    else if (dept() === 'marketing') { Office.focus(next); Office.highlight(next); }
     else { Station.focus(next); Station.highlight(next); }
     renderRoster(); renderLog(); renderFeed(true);
   }
@@ -160,20 +166,20 @@
   // ---------- Claude ----------
   const live = {}, reqAgent = {}; let reqSeq = 0;
   const cleanErr = (e) => String(e?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
-  async function ask(prompt, { fast = false, maxTokens = 4000, agent = null, task = '', model: forceModel = null, images = null } = {}) {
+  async function ask(prompt, { fast = false, maxTokens = 4000, agent = null, task = '', model: forceModel = null, images = null, web = 0, onCost = null } = {}) {
     if (!keys.anthropic) throw new Error('Add your Anthropic API key in Settings.');
     rollDay();
     if (D.settings.spendCap && (D.day.usd || 0) >= D.settings.spendCap) throw new Error(`Daily spend cap of $${D.settings.spendCap} reached — raise it in Settings or wait until tomorrow.`);
     const model = forceModel || modelFor(agent, fast);
     const reqId = ++reqSeq;
-    if (agent) { live[agent] = { task, text: '', busy: true, at: Date.now() }; reqAgent[reqId] = agent; feedTouch(agent); }
+    if (agent) { live[agent] = { task, text: '', busy: true, at: Date.now(), search: '' }; reqAgent[reqId] = agent; feedTouch(agent); }
     try {
       let r;
-    try { r = await kivo.ask({ prompt, model, maxTokens, stream: !!agent, reqId, images }); }
+    try { r = await kivo.ask({ prompt, model, maxTokens, stream: !!agent, reqId, images, web: web || undefined }); }
     catch (e) { const m = cleanErr(e); throw new Error(/ABORTED/.test(m) ? 'ABORTED' : m); }
       if (agent) live[agent].text = r.text;
       D.day.tokens += (r.usage.input_tokens || 0) + (r.usage.output_tokens || 0);
-      recordCost(agent, model, r.usage);
+      const c = recordCost(agent, model, r.usage); if (onCost) onCost(c);
       renderCmd(); persist();
       return r.text;
     } finally { if (agent) { live[agent].busy = false; delete reqAgent[reqId]; feedTouch(agent); } }
@@ -206,7 +212,7 @@
     const s = D.settings, t = tpl();
     return `Today is ${new Date().toDateString()}. Shop: ${s.shopName || 'an Etsy print-on-demand shop'}. Brand voice: ${s.voice || t.voice}. Shop focus: ${s.defaultBrief || t.brief}
 Selling calendar (made-to-order shirts take ~10 days to arrive, new listings take a few days to show in search): ${calendarText()}.
-Calendar rules: PRIME = the best holidays to design for now. LAST CHANCE = only worth it for quick wins, at most one design. TOO LATE = don't design for it, unless the owner's brief explicitly asks for it. EARLY = fine for a head start. If the owner's brief names a holiday, always follow the brief.`;
+Calendar rules: PRIME = the best holidays to design for now. LAST CHANCE = only worth it for quick wins, at most one design. TOO LATE = don't design for it, unless the owner's brief explicitly asks for it. EARLY = fine for a head start. If the owner's brief names a holiday, always follow the brief.${window.SP?.crewNotes('store') || ''}`;
   }
 
   // ---------- selling calendar ----------
@@ -371,6 +377,8 @@ Reply with a JSON array of ${count} objects: {"phrase": "the words printed on th
       log('ultron', `Mission ${plan.codename} complete. ${sum}.`, 'ok');
       toast('Mission complete · ' + sum);
       notify(`Mission ${plan.codename} complete`, sum);
+      const recap = `Mission "${plan.codename}" (${brief}): ${sum}. New designs: ${made.map((p) => `"${p.trend.phrase}" [${p.status}] title: ${p.listing?.title || ''} · tags: ${(p.listing?.tags || []).join(', ')} · price ${p.ledger ? money(p.ledger.price) : '?'}`).join(' | ')}`;
+      setTimeout(() => window.SP?.afterRun('store', recap), 0);
     } catch (e) {
       if (e.message === 'ABORTED') log('ultron', 'Mission aborted.', 'err');
       else { log('ultron', 'Mission failed: ' + e.message, 'err'); toast(e.message, true); notify('Mission failed', e.message); }
@@ -765,10 +773,11 @@ Recent designs: ${D.products.slice(-10).map((p) => `${p.trend?.phrase} [${p.stat
     $('#chat-send').disabled = true;
     try {
       const hist = D.chat.slice(-12).map((m) => `${m.role === 'user' ? 'OWNER' : 'ULTRON'}: ${m.text}`).join('\n');
-      const r = await askJSON(`You are ULTRON, the commander AI inside Kivo Ultron, an app that runs an Etsy print-on-demand shop with a crew of agents (Scout finds trends, Forge designs, Scribe writes listings, Auditor checks trademarks, Ledger prices, Courier uploads to Printify and publishes to Etsy, Analyst reads orders). Talk to the shop owner: be direct, practical, upbeat, British English, no waffle. You can take actions.
+      const r = await askJSON(`You are ULTRON, the commander AI inside Kivo Ultron, a suite of AI departments ("spaces"): STORE runs an Etsy print-on-demand shop, MARKETING runs its social media, and the owner can build their own spaces with their own bots and hire extra bots into any space. The store crew (Scout finds trends, Forge designs, Scribe writes listings, Auditor checks trademarks, Ledger prices, Courier uploads to Printify and publishes to Etsy, Analyst reads orders). Talk to the shop owner: be direct, practical, upbeat, British English, no waffle. You can take actions.
 ${shopContext()}
 Current state:
 ${stateSummary()}
+${window.SP?.summary() || ''}
 Conversation:
 ${hist}
 Available actions (use only when the owner asks for them or clearly wants them):
@@ -779,13 +788,19 @@ Available actions (use only when the owner asks for them or clearly wants them):
 - {"type":"sync"} pull orders and sales now
 - {"type":"model","agent":"ultron"|"scout"|"forge"|"scribe"|"auditor"|"all","model":"opus"|"sonnet"|"haiku"} switch the Claude model an agent uses (Opus = best quality but roughly 2x Sonnet's cost; Haiku is about 20x cheaper than Sonnet; Haiku = fastest and cheapest, fine for checks)
 - {"type":"show","status":"review"|"published"|"ready"|"failed"|"all"} show those products in the terminal
+- {"type":"hire","space":"store"|"marketing"|"<custom space name>"|"current","count":1-6,"brief":"what the new bots should do"} hire new bots into a space (the app designs them from the brief; or give "agents":[{"name","job","team"}])
+- {"type":"newspace","name":"...","mission":"what the space is for","template":"sales"|"youtube"|"research"|"finance"|"trading"|"support"|"dev"|"life"|"product"|"blank","count":2-8} build a new space (department) with its own team of bots; leave out template to have the team designed from the mission
+- {"type":"runspace","space":"<custom space name>","brief":"..."} give a custom space a job and start it
 IMPORTANT: actions only happen if you put them in "actions". Never say you started, queued or changed something unless the matching action is in your list — the app confirms each action to the owner itself. If the owner asks for designs, always include a mission action.
 Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}`, { maxTokens: 1500, agent: 'ultron', task: 'Answering you' });
       D.chat.push({ role: 'ultron', text: String(r.reply || 'Done.'), ts: Date.now() });
       renderChat();
       const acts = Array.isArray(r.actions) ? r.actions : r.actions ? [r.actions] : r.action ? [r.action] : [];
       let started = false;
-      for (const a of acts) { const r2 = await doAction(a); if (r2 === 'mission' || r2 === 'campaign') started = true; }
+      const kinds = new Set();
+      for (const a of acts) { const r2 = await doAction(a); if (r2) kinds.add(r2); if (r2 === 'mission' || r2 === 'campaign') started = true; }
+      if (!kinds.has('hire') && /^\s*(?:(?:can|could|will) you |please |ultron,? )?(?:hire|recruit|add)\b[^?]*\b(bots?|agents?|people|someone|helpers?|staff|\w+ers?)\b/i.test(msg)) { await doAction({ type: 'hire', brief: msg, count: Number((msg.match(/\b(\d{1,2})\b/) || [])[1]) || 1 }); started = true; }
+      else if (!kinds.has('newspace') && !kinds.has('hire') && /\b(build|set ?up|create|make|start)\b[^.?!]*\b(space|department|team)\b/i.test(msg) && !/\b(designs?|shirts?|posts?)\b/i.test(msg)) { await doAction({ type: 'newspace', mission: msg, name: (msg.match(/\b(?:a|an|my)\s+([\w ]{3,24}?)\s+(?:space|department|team)\b/i) || [])[1] }); started = true; }
       // safety net: the owner clearly asked for designs but no mission came back
       const want = msg.match(/\b(make|create|design|do|run|generate|give me|knock out|start)\b[^.?!]*?\b(\d{1,2})\b[^.?!]*?\b(designs?|shirts?|tees?|t-?shirts?|products?|listings?)\b/i);
       const wantMk = /\b(posts?|reels?|tiktoks?|pins?|campaign|marketing|social)\b/i.test(msg) && msg.match(/\b(\d{1,2})\b/);
@@ -800,8 +815,11 @@ Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}
   function normAction(a) {
     if (!a || typeof a !== 'object') return {};
     const p = { ...a, ...(a.params || a.args || a.parameters || a.data || {}) };
-    let t = String(a.type || a.action || a.name || a.command || a.tool || '').toLowerCase().replace(/[^a-z]/g, '');
-    if (/campaign|marketing|social|post|content|reel|tiktok|instagram|pinterest/.test(t)) t = 'campaign';
+    let t = String(a.type || a.action || a.command || a.tool || a.name || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (/hire|recruit|addagent|addbot|newbot|newagent/.test(t)) t = 'hire';
+    else if (/runspace|startspace|spacerun|runteam/.test(t)) t = 'runspace';
+    else if (/space|department|team/.test(t)) t = 'newspace';
+    else if (/campaign|marketing|social|post|content|reel|tiktok|instagram|pinterest/.test(t)) t = 'campaign';
     else if (/mission|design|create|make|generate|produce/.test(t)) t = 'mission';
     else if (/autopilot/.test(t)) t = 'autopilot';
     else if (/model/.test(t)) t = 'model';
@@ -838,6 +856,9 @@ Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}
       const who = a.agent === 'all' ? AI_AGENTS : AI_AGENTS.includes(a.agent) ? [a.agent] : [];
       for (const ag of who) setAgentModel(ag, m, true);
       if (who.length) note(`▶ ${a.agent === 'all' ? 'All agents' : a.agent.toUpperCase()} now on ${modelName(m)}`);
+    }
+    else if (['hire', 'newspace', 'runspace'].includes(a.type)) {
+      try { return await SP.chatAction(a, note); } catch (e) { note('⚠ ' + cleanErr(e)); return; }
     }
     else if (a.type === 'campaign') {
       if (!window.MK) return;
@@ -1081,6 +1102,7 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
   function renderFeed(full) {
     const box = $('#feed');
     if (!feedAgent) { box.hidden = true; box.dataset.agent = ''; return; }
+    if (feedAgent.startsWith('sp.') || (feedAgent === 'ultron' && window.SP?.get(dept()))) { SP.renderFeed(box, feedAgent, live[feedAgent], full); return; }
     if (dept() === 'marketing' && window.MK) { MK.renderFeed(box, feedAgent, live[feedAgent], full); return; }
     const a = AGENTS.find((x) => x.id === feedAgent), st = agentState[feedAgent] || {}, L = live[feedAgent];
     if (full || box.dataset.agent !== feedAgent) {
@@ -1715,7 +1737,7 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
       if (st.state === 'downloaded') { $('#btn-update').hidden = false; $('#btn-update').textContent = `UPDATE ${st.version} · RESTART`; notify('Kivo Ultron update ready', `Version ${st.version} installs when you restart.`); }
     });
     $('#btn-update').onclick = () => kivo.installUpdate?.();
-    kivo.onDelta?.(({ reqId, delta }) => { const a = reqAgent[reqId]; if (a && live[a]) { live[a].text += delta; feedTouch(a); } });
+    kivo.onDelta?.(({ reqId, delta, search }) => { const a = reqAgent[reqId]; if (a && live[a]) { live[a].text += delta; if (search) { live[a].search = search; log(a, `Searching the web: “${search}”`); } feedTouch(a); } });
     kivo.onTray?.((c) => {
       if (c === 'run' && !running) runFromUI();
       if (c === 'toggleAuto') setAuto(!D.settings.auto);
@@ -1729,27 +1751,33 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
   }
   function stopMission() {
     if (!running || stopping) return;
-    stopping = true; abortFlag = true; kivo.cancelAll?.();
+    stopping = true; abortFlag = true; window.KU.cancelAgents(AGENTS.map((a) => a.id).filter((a) => a !== 'ultron' || !window.SP?.anyRunning));
     const q = missionQueue.length; missionQueue.length = 0;
     log('ultron', 'Stop requested — cancelling the current job' + (q ? ` and ${q} queued mission(s)` : '') + '.', 'err');
     renderControls();
   }
   function setDept(d) {
-    if (!['store', 'marketing'].includes(d)) d = 'store';
+    const sp = window.SP?.get(d) || null;
+    if (!sp && !['store', 'marketing'].includes(d)) d = 'store';
     D.ui.dept = d; persist();
     document.querySelectorAll('.dept').forEach((b) => b.classList.toggle('on', b.dataset.dept === d));
-    document.body.dataset.dept = d;
-    const mk = d === 'marketing';
-    $('#station').hidden = mk; $('#room-labels').hidden = mk; $('#office').hidden = !mk; Office.show(mk);
-    $('#map-title').textContent = mk ? 'MARKETING FLOOR' : 'STATION MAP';
-    $('#mission-chip').hidden = mk;
-    $('#readouts').hidden = mk; $('#readouts-mk').hidden = !mk;
-    $('#brief-store').hidden = mk; $('#brief-mk').hidden = !mk;
-    $('#term-store').hidden = mk; $('#term-mk').hidden = !mk;
-    $('#cmd-template').textContent = mk ? (MK.M().settings.handle || 'Marketing') : (D.settings.shopName || tpl().name);
-    $('#cmd-mode').textContent = mk ? { auto: 'AUTO-POST', review: 'REVIEW FIRST', make: 'MAKE ONLY' }[MK.M().settings.mode] : MODES[D.settings.mode];
+    const kind = sp ? 'space' : d;
+    document.body.dataset.dept = kind;
+    const mk = kind === 'marketing', st = kind === 'store';
+    $('#station').hidden = !st; $('#room-labels').hidden = !st; $('#office').hidden = !mk; Office.show(mk);
+    if (sp) SP.show(d); else SP.hideCustom();
+    $('#map-title').textContent = sp ? sp.name.toUpperCase() + ' FLOOR' : mk ? 'MARKETING FLOOR' : 'STATION MAP';
+    $('#mission-chip').hidden = !st;
+    $('#readouts').hidden = !st; $('#readouts-mk').hidden = !mk; $('#readouts-sp').hidden = !sp;
+    $('#brief-store').hidden = !st; $('#brief-mk').hidden = !mk; $('#brief-sp').hidden = !sp;
+    $('#term-store').hidden = !st; $('#term-mk').hidden = !mk; $('#term-sp').hidden = !sp;
+    if (!sp) {
+      $('#cmd-template').textContent = mk ? (MK.M().settings.handle || 'Marketing') : (D.settings.shopName || tpl().name);
+      $('#cmd-mode').textContent = mk ? { auto: 'AUTO-POST', review: 'REVIEW FIRST', make: 'MAKE ONLY' }[MK.M().settings.mode] : MODES[D.settings.mode];
+    }
     if (feedAgent) selectAgent(null);
-    renderRoster(); if (mk) MK.renderAll(); else renderAll();
+    renderRoster(); if (sp) SP.renderAll(); else if (mk) MK.renderAll(); else renderAll();
+    SP.renderTabs();
     requestAnimationFrame(() => { Station.relayout(); Office.relayout(); });
   }
   function saveUI() { D.ui = { ...D.ui, brief: $('#brief').value, count: +$('#count').value || 3, tone: $('#tone').value }; persist(); }
@@ -1783,8 +1811,8 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     Core.init($('#core'));
     wire();
     for (const a of AGENTS) agentState[a.id] = { status: keys.anthropic ? 'IDLE' : 'OFFLINE' };
-    await SOCIAL.load(); MK.init();
-    document.querySelectorAll('.dept:not(.soon)').forEach((b) => (b.onclick = () => setDept(b.dataset.dept)));
+    await SOCIAL.load(); MK.init(); SP.init();
+    document.querySelectorAll('.dept[data-dept="store"], .dept[data-dept="marketing"]').forEach((b) => (b.onclick = () => setDept(b.dataset.dept)));
     renderRoster(); renderLog(); renderChat(); renderAll();
     setDept(D.ui.dept || 'store');
     const ver = await kivo.version?.(); if (ver) $('#s-ver').textContent = 'Kivo Ultron v' + ver;
@@ -1795,7 +1823,9 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
   window.KU = {
     get D() { return D; }, get keys() { return keys; }, get feedAgent() { return feedAgent; },
     ask, askJSON, log, persist, toast, notify, setAgent, agentState, live, money, usd, svgURL, svgToPNG, shopContext, calendarText,
-    tpl, modelFor, setAgentModel, MODEL_CHOICES, modelName, costOf, stamp, fatal, cleanErr, feedTouch, selectAgent, renderReadouts, setDept,
+    tpl, modelFor, setAgentModel, MODEL_CHOICES, modelName, costOf, stamp, fatal, cleanErr, feedTouch, selectAgent, renderReadouts, setDept, renderRoster,
+    storeSummary: () => stateSummary(), dept: () => dept(), busyElsewhere: () => running || !!window.MK?.running,
+    cancelAgents: (ids) => { const set = new Set(ids); const r = Object.entries(reqAgent).filter(([, a]) => set.has(a)).map(([k]) => Number(k)); if (r.length) kivo.cancelReq?.(r); },
   };
   boot();
 })();

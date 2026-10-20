@@ -18,7 +18,7 @@
     <nav class="depts" id="depts" aria-label="Departments">
       <button class="dept on" data-dept="store">STORE</button>
       <button class="dept" data-dept="marketing">MARKETING</button>
-      <button class="dept soon" disabled title="Coming next: Customer Service, Finance">+ MORE SOON</button>
+      <button class="dept add" id="dept-add" title="Build your own space with its own team of bots">+ SPACE</button>
     </nav>
     <div class="readouts" id="readouts">
       <div class="ro"><label>SALES</label><b id="ro-sales">—</b></div>
@@ -34,6 +34,12 @@
       <div class="ro"><label>VIEWS</label><b id="mk-ro-views">0</b></div>
       <div class="ro"><label>LIKES</label><b id="mk-ro-likes">0</b></div>
       <div class="ro"><label>TO REVIEW</label><b id="mk-ro-review">0</b></div>
+    </div>
+    <div class="readouts" id="readouts-sp" hidden>
+      <div class="ro"><label>JOBS</label><b id="sp-ro-runs">0</b></div>
+      <div class="ro"><label>BOTS</label><b id="sp-ro-bots">0</b></div>
+      <div class="ro"><label>WAITING</label><b id="sp-ro-wait">0</b></div>
+      <div class="ro"><label>COST TODAY</label><b id="sp-ro-cost">$0</b></div>
     </div>
     <div class="winctl">
       <button id="btn-update" class="upd" hidden>UPDATE READY · RESTART</button>
@@ -69,6 +75,7 @@
       <div class="glass station-glass">
         <canvas id="station" width="640" height="360"></canvas>
         <canvas id="office" hidden></canvas>
+        <canvas id="spacefloor" hidden></canvas>
         <div id="room-labels"></div>
         <div id="feed" class="feed" hidden></div>
         <div class="scan"></div>
@@ -158,6 +165,25 @@
           <span class="auto-txt"><b>MARKETING AUTOPILOT</b><span id="mk-auto-desc">Off</span></span>
         </label>
        </div>
+       <div id="brief-sp" hidden>
+        <div class="sp-id"><b id="sp-name">SPACE</b><span id="sp-mission" class="tiny dim"></span></div>
+        <div class="glass needs" id="sp-needs"></div>
+        <label class="lbl" for="sp-brief">BRIEF · WHAT SHOULD THE TEAM DO?</label>
+        <textarea id="sp-brief" rows="4" spellcheck="false"></textarea>
+        <div class="row">
+          <button class="hw-btn" id="sp-hire-btn">+ HIRE A BOT</button>
+          <button class="hw-btn" id="sp-edit-btn">EDIT SPACE</button>
+        </div>
+        <div class="mc">
+          <button class="mc-run sp" id="sp-run">▶ RUN</button>
+          <div class="mc-status" id="sp-status"></div>
+        </div>
+        <label class="auto-row" for="sp-auto">
+          <span class="switch"><input type="checkbox" id="sp-auto"><i></i></span>
+          <span class="auto-txt"><b>AUTOPILOT</b><span id="sp-auto-desc">Off</span></span>
+        </label>
+        <div class="row sp-every"><label class="lbl" for="sp-hours">RUN EVERY (HOURS)</label><input id="sp-hours" type="number" min="1" value="24"></div>
+       </div>
       </div>
 
       <div class="cpane" id="cp-chat" hidden>
@@ -226,6 +252,17 @@
         <div class="term-actions"><button class="pclose" data-panel="term" title="Close">✕</button></div>
       </div>
       <div class="glass term-body"><div class="mk-body" id="mk-body"></div></div>
+     </div>
+     <div id="term-sp" class="term-inner" hidden>
+      <div class="term-head">
+        <h2 class="engr">SPACE TERMINAL</h2>
+        <nav class="tabs" id="sp-tabs">
+          <button class="tab on" data-sp="outputs">OUTPUTS</button>
+          <button class="tab" data-sp="team">TEAM</button>
+        </nav>
+        <div class="term-actions"><button class="pclose" data-panel="term" title="Close">✕</button></div>
+      </div>
+      <div class="glass term-body"><div class="mk-body" id="sp-body"></div></div>
      </div>
     </section>
   </main>
@@ -421,6 +458,77 @@
 </div>
 
 <div id="toast" hidden></div>
+<!-- HIRE A BOT -->
+<div class="overlay" id="sp-hire" hidden>
+  <div class="sheet metal screws narrow">
+    <div class="sheet-head"><h2 class="engr" id="hire-title">HIRE A BOT</h2><button class="wc close" id="hire-close" aria-label="Close">&#x2715;</button></div>
+    <div class="sheet-body">
+      <label class="lbl" for="hire-desc">WHAT DO YOU NEED? · ULTRON WRITES THE JOB</label>
+      <div class="row"><input id="hire-desc" type="text" placeholder="e.g. someone to check my prices against other Etsy shops"><button class="hw-btn go" id="hire-ai">WRITE IT FOR ME</button></div>
+      <div class="lbl" id="hire-quick-l">OR PICK ONE</div>
+      <div class="chips" id="hire-quick"></div>
+      <div class="row">
+        <div class="field"><label class="lbl" for="hire-name">NAME</label><input id="hire-name" type="text" maxlength="28"></div>
+        <div class="field" id="hire-team-f"><label class="lbl" for="hire-team">TEAM</label><input id="hire-team" type="text" maxlength="18" placeholder="Research"></div>
+        <div class="field"><label class="lbl" for="hire-icon">SCREEN</label><select id="hire-icon"></select></div>
+      </div>
+      <label class="lbl" for="hire-job">JOB · WHAT IT PRODUCES</label>
+      <textarea id="hire-job" rows="4"></textarea>
+      <div class="row">
+        <div class="field"><label class="lbl" for="hire-model">CLAUDE MODEL</label><select id="hire-model"></select></div>
+        <div class="field" id="hire-when-f"><label class="lbl" for="hire-when">WHEN IT WORKS</label><select id="hire-when"><option value="after">After every run</option><option value="manual">Only when I press Run</option></select></div>
+      </div>
+      <div class="lbl">TOOLS</div>
+      <div class="row wrap tools-row">
+        <label class="chk"><input type="checkbox" id="hire-t-web"> Web search (~1p per search)</label>
+        <label class="chk"><input type="checkbox" id="hire-t-store"> Store data</label>
+        <label class="chk"><input type="checkbox" id="hire-t-marketing"> Marketing data</label>
+        <label class="chk"><input type="checkbox" id="hire-t-memory"> Past outputs</label>
+      </div>
+      <label class="chk" id="hire-approve-l"><input type="checkbox" id="hire-approve"> I approve its work before the next bot starts</label>
+      <label class="chk" id="hire-feed-l"><input type="checkbox" id="hire-feed"> Feed its notes into the next run</label>
+      <div class="wz-msg" id="hire-msg"></div>
+      <div class="row end">
+        <button class="hw-btn danger" id="hire-del" hidden>LET GO</button>
+        <button class="hw-btn go big" id="hire-save">HIRE</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- SPACE BUILDER -->
+<div class="overlay" id="sp-builder" hidden>
+  <div class="sheet metal screws">
+    <div class="sheet-head"><h2 class="engr" id="sb-title">NEW SPACE</h2><button class="wc close" id="sb-close" aria-label="Close">&#x2715;</button></div>
+    <div class="sheet-body">
+      <div class="lbl" id="sb-tpl-l">START FROM</div>
+      <div class="tpl-grid sb-tpls" id="sb-tpls"></div>
+      <div class="row">
+        <div class="field"><label class="lbl" for="sb-name">NAME</label><input id="sb-name" type="text" maxlength="24" placeholder="e.g. Sales Team"></div>
+        <div class="field"><div class="lbl">COLOUR</div><div class="hues" id="sb-hues"></div></div>
+      </div>
+      <label class="lbl" for="sb-mission">WHAT IS THIS SPACE FOR?</label>
+      <textarea id="sb-mission" rows="2" placeholder="e.g. Find local businesses that need a new website and write outreach emails"></textarea>
+      <label class="lbl" for="sb-brief">FIRST BRIEF (OPTIONAL)</label>
+      <textarea id="sb-brief" rows="2"></textarea>
+      <div class="row sb-bar">
+        <div class="lbl">THE TEAM · RUNS TOP TO BOTTOM <span class="dim" id="sb-count"></span></div>
+        <span class="grow"></span>
+        <input id="sb-n" type="number" min="2" max="8" value="4" title="How many bots">
+        <button class="hw-btn go" id="sb-ai">DESIGN THE TEAM</button>
+        <button class="hw-btn" id="sb-addbot">+ ADD BOT</button>
+      </div>
+      <div class="sb-bots" id="sb-bots"></div>
+      <div class="wz-msg" id="sb-msg"></div>
+      <div class="row end">
+        <button class="hw-btn" id="sb-import">IMPORT</button>
+        <button class="hw-btn" id="sb-export" hidden>EXPORT</button>
+        <button class="hw-btn danger" id="sb-del" hidden>DELETE SPACE</button>
+        <span class="grow"></span>
+        <button class="hw-btn go big" id="sb-save">SAVE SPACE</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="overlay" id="mk-drawer" hidden>
   <div class="sheet metal screws">
     <div class="sheet-head"><h2 class="engr" id="mk-drawer-title">POST</h2><button class="wc close" id="mk-drawer-close" aria-label="Close">&#x2715;</button></div>
@@ -433,5 +541,6 @@
 <script src="app.js"></script>
 <script src="social.js"></script>
 <script src="marketing.js"></script>
+<script src="spaces.js"></script>
 </body>
 </html>

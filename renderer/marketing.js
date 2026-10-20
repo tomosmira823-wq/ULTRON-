@@ -189,7 +189,7 @@ Owner's brief: ${brief}
 Posts to make: ${count}. Platforms: ${plats.join(', ')}.
 Products available (id in brackets):
 ${catalogTxt}
-What has worked so far: ${perf}
+What has worked so far: ${perf}${window.SP?.crewNotes('marketing') || ''}
 Reply with JSON only: {"name": "short campaign name", "goal": "one sentence", "focusProductIds": ["ids of the products to feature, best first"], "notes": "2 sentences of direction for the team"}`, { agent: 'ultron', task: 'Planning the campaign', maxTokens: 900 });
       camp.name = plan.name; camp.goal = plan.goal;
       say('ultron', `Campaign "${plan.name}": ${plan.goal}`, 'ok'); checkAbort();
@@ -216,7 +216,7 @@ Brief: ${brief}. Direction from the chief: ${plan.notes || ''}
 Platforms to use: ${plats.join(', ')} (spread posts across them; Pinterest = image pins, TikTok = video, Instagram = mix of image and Reels).
 Products:\n${featTxt}
 Angles to draw from: ${(trends.angles || []).join('; ')}
-Do: ${(rivals.do || []).join('; ')}. Avoid: ${(rivals.avoid || []).join('; ')}.
+Do: ${(rivals.do || []).join('; ')}. Avoid: ${(rivals.avoid || []).join('; ')}.${window.SP?.crewNotes('marketing') || ''}
 Reply with JSON only: {"posts": [{"platform": "instagram"|"tiktok"|"pinterest", "format": "image"|"video", "productIds": ["1-4 product ids"], "angle": "the angle", "goal": "sales"|"reach"|"saves"}]}`, { agent: 'mk.strategy', task: `Planning ${count} posts`, maxTokens: 2200 });
       let plan2 = (strat.posts || []).filter((x) => PLAT[x.platform] && plats.includes(x.platform)).slice(0, count);
       if (!plan2.length) throw new Error('Strategist came back empty');
@@ -280,13 +280,15 @@ Reply with JSON only: {"art": [{"layout": "...", "palette": {"bg": "#hex", "fg":
       const sum = `${made.length} posts ready` + (m.settings.mode === 'auto' ? ' and scheduled' : m.settings.mode === 'review' ? ' — waiting for your approval' : '');
       say('ultron', `Campaign "${camp.name}" done: ${sum}.`, 'ok');
       K.notify('Marketing run complete', sum); K.toast(sum);
+      const recap = `Campaign "${camp.name}" (${brief}): ${sum}. Posts: ${made.map((p) => `${PLAT[p.platform].name} ${p.format} · hook "${p.hook}" · caption: ${(p.caption || '').slice(0, 160)} ${(p.hashtags || []).join(' ')}`).join(' | ')}`;
+      setTimeout(() => window.SP?.afterRun('marketing', recap), 0);
     } catch (e) {
       if (e.message === 'ABORTED') say('ultron', 'Marketing run stopped.', 'err');
       else { say('ultron', 'Marketing run failed: ' + e.message, 'err'); K.toast(e.message, true); }
       for (const p of m.posts) if (p.status === 'drafting' || p.status === 'rendering') { p.status = p.files?.feed || p.files?.video ? 'review' : 'failed'; p.error = p.error || e.message; }
     } finally {
       running = false; progress = null;
-      for (const a of Office.AGENTS) if (K.agentState[a.id]?.status === 'WORKING') idle(a.id);
+      for (const a of Office.BASE_AGENTS) if (K.agentState[a.id]?.status === 'WORKING') idle(a.id);
       if (K.agentState.ultron?.status === 'WORKING') idle('ultron');
       renderAll(); save();
     }
@@ -685,7 +687,7 @@ Reply with JSON only: {"segments": [{"start": 0, "end": 3.5, "text": "..."}], "h
     const m = M(), by = {}; for (const p of m.posts) by[p.status] = (by[p.status] || 0) + 1;
     return `Marketing: ${running ? 'a campaign is running now' : 'idle'}; posts by status ${JSON.stringify(by)}; connected: ${['instagram', 'tiktok', 'pinterest'].filter((p) => window.SOCIAL?.connected(p)).join(', ') || 'none'}; mode ${m.settings.mode}. ${performanceSummary()}`;
   }
-  function stop() { if (!running) return; abort = true; kivo.cancelAll?.(); K.toast('Stopping the marketing run…'); }
+  function stop() { if (!running) return; abort = true; K.cancelAgents(['ultron', ...Office.BASE_AGENTS.map((a) => a.id)]); K.toast('Stopping the marketing run…'); }
 
   // ---------- wiring ----------
   function init() {

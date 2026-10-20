@@ -13,7 +13,11 @@
     auditor: { x: 695, y: 215, w: 225, h: 150, color: '#ff6b8b', desk: [0.5, 0.62],  path: [[807, 290], [480, 290], [480, 272]] },
     ledger:  { x: 225, y: 420, w: 195, h: 95,  color: '#b6ff5a', desk: [0.75, 0.62], path: [[322, 467], [322, 390], [450, 390], [450, 272]] },
     courier: { x: 540, y: 415, w: 225, h: 100, color: '#7ee8ff', desk: [0.25, 0.55], path: [[652, 465], [652, 390], [510, 390], [510, 272]] },
+    hires:   { x: 40,  y: 412, w: 165, h: 110, color: '#e8f0ec', desk: [0.5, 0.5],   path: [[122, 466], [122, 395], [450, 395], [450, 272]] },
   };
+  // bots the owner hired into the store: up to 6 desks in the NEW HIRES annex
+  let hires = []; const hireSt = {};
+  const HIRE_COLS = ['#ffd36b', '#5ac8ff', '#ff8a5a', '#c38bff', '#ff6b8b', '#b6ff5a'];
   const PS = 1.5; // props were authored at 2/3 scale
 
   let ctx, canvas, labelsEl, onSelect = () => {};
@@ -36,13 +40,13 @@
     for (let i = 0; i < 420; i++) stars.push({ x: Math.random(), y: Math.random(), s: Math.random() < 0.1 ? 2 : 1, p: rnd(0, 6.28), v: rnd(1, 5) });
     for (const [id, r] of Object.entries(ROOMS)) {
       const s = state[id] = { busy: false, err: false, text: '', crew: [] };
-      if (id !== 'ultron') {
+      if (id !== 'ultron' && id !== 'hires') {
         s.lead = { x: r.x + r.w * 0.4, y: r.y + r.h * 0.7, tx: 0, ty: 0, wait: rnd(0, 2), step: 0, face: 1 };
         for (let i = 0; i < 2; i++) s.crew.push({ x: rnd(r.x + 14, r.x + r.w - 14), y: rnd(r.y + 34, r.y + r.h - 10), tx: 0, ty: 0, wait: rnd(0, 3), step: 0 });
       }
       const el = document.createElement('div');
       el.className = 'rlabel'; el.dataset.id = id;
-      el.textContent = id.toUpperCase();
+      el.textContent = id === 'hires' ? 'NEW HIRES' : id.toUpperCase();
       el.addEventListener('click', () => onSelect(id));
       labelsEl.appendChild(el);
       const b = document.createElement('div'); b.className = 'bubble'; b.hidden = true;
@@ -74,7 +78,7 @@
       if (drag?.moved) return;
       const r = canvas.getBoundingClientRect();
       const x = ((e.clientX - r.left - view.ox) / view.s - W / 2) / cam.z + cam.x, y = ((e.clientY - r.top - view.oy) / view.s - H / 2) / cam.z + cam.y;
-      for (const [id, room] of Object.entries(ROOMS)) if (x >= room.x && x <= room.x + room.w && y >= room.y && y <= room.y + room.h) { onSelect(id); return; }
+      for (const [id, room] of Object.entries(ROOMS)) if (x >= room.x && x <= room.x + room.w && y >= room.y && y <= room.y + room.h) { onSelect(id === 'hires' ? (hireAt(x, y) || hires[0]?.id || 'hire') : id); return; }
       if (focused) onSelect(null);
     });
     new ResizeObserver(placeLabels).observe(canvas);
@@ -107,6 +111,7 @@
   function clampCam() { const m = 260; camT.x = Math.max(-m, Math.min(W + m, camT.x)); camT.y = Math.max(-m, Math.min(H + m, camT.y)); }
   // zoom the camera onto a room (null = whole station). panelFrac = share of the view covered by the feed panel on the right
   function focus(id, panelFrac = 0.46) {
+    if (hireSt[id] || id === 'hire') id = 'hires';
     focused = ROOMS[id] ? id : null;
     if (!focused) { Object.assign(camT, { x: W / 2, y: H / 2, z: 1 }); return; }
     const r = ROOMS[focused];
@@ -115,6 +120,11 @@
   }
 
   function setBusy(id, busy, text, err) {
+    if (hireSt[id]) {
+      Object.assign(hireSt[id], { busy: !!busy, err: !!err, text: text || '' });
+      const any = hires.find((h) => hireSt[h.id]?.busy), e2 = hires.some((h) => hireSt[h.id]?.err);
+      id = 'hires'; busy = !!any; err = e2; text = any ? `${any.name}: ${hireSt[any.id].text || 'working'}` : '';
+    }
     const s = state[id]; if (!s) return;
     s.busy = !!busy; s.err = !!err; s.text = text || '';
     s.el.classList.toggle('busy', s.busy);
@@ -126,8 +136,15 @@
     if (s.lead) s.lead.tx = 0;
   }
   function highlight(id) { selected = id; }
+  function setHires(list) {
+    hires = (list || []).slice(0, 6);
+    for (const h of hires) if (!hireSt[h.id]) hireSt[h.id] = { busy: false, err: false, text: '' };
+    for (const k of Object.keys(hireSt)) if (!hires.some((h) => h.id === k)) delete hireSt[k];
+    if (state.hires) state.hires.el.textContent = hires.length ? `NEW HIRES · ${hires.length}` : 'NEW HIRES';
+  }
 
   function packet(from, to, color) {
+    if (hireSt[from]) from = 'hires'; if (hireSt[to]) to = 'hires';
     const a = ROOMS[from], b = ROOMS[to]; if (!a || !b) return;
     if (from === 'ultron') { ultron.point = to; ultron.pointT = 1.6; }
     const route = a.path.concat(b.path.slice().reverse().slice(1));
@@ -182,7 +199,7 @@
     const col = s.err ? C.bad : s.busy ? C.warn : r.color;
     ctx.globalAlpha = s.busy ? 0.55 + 0.45 * Math.sin(t * 8) : 0.4; px(r.x + 4, r.y + 15, r.w - 8, 2, col); ctx.globalAlpha = 1;
     if (s.busy) { ctx.globalAlpha = 0.05 + 0.04 * Math.sin(t * 6); px(r.x, r.y, r.w, r.h, col); ctx.globalAlpha = 1; }
-    if (selected === id) {
+    if (selected === id || (id === 'hires' && hireSt[selected])) {
       ctx.strokeStyle = C.g; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]); ctx.lineDashOffset = -t * 12;
       ctx.strokeRect(r.x - 9.5, r.y - 9.5, r.w + 19, r.h + 19); ctx.setLineDash([]);
     }
@@ -196,8 +213,32 @@
   }
 
   // ---------- room props (authored at 2/3 scale, drawn scaled) ----------
+  const hireSlot = (r, i) => [r.x + 30 + (i % 3) * 52, r.y + 58 + Math.floor(i / 3) * 44];
+  function drawHires(r) {
+    if (!hires.length) {
+      ctx.globalAlpha = 0.45 + 0.25 * Math.sin(t * 2); ctx.fillStyle = C.g; ctx.font = '400 9px Michroma, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('+ HIRE A BOT', r.x + r.w / 2, r.y + r.h / 2 + 10); ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+      for (let i = 0; i < 3; i++) { const [x, y] = hireSlot(r, i); px(x - 14, y + 2, 28, 6, '#2a3134'); }
+      return;
+    }
+    hires.slice(0, 6).forEach((h, i) => {
+      const [x, y0] = hireSlot(r, i), s = hireSt[h.id] || {}, col = HIRE_COLS[i % HIRE_COLS.length];
+      const y = Math.round(y0 - (s.busy ? Math.abs(Math.sin(t * 8 + i)) * 2 : 0));
+      px(x - 15, y0 + 2, 30, 7, '#3a4044'); px(x - 13, y0 + 2, 26, 2, s.busy ? col : '#55606a'); // desk
+      px(x + 6, y0 - 8, 10, 8, '#050806'); px(x + 7, y0 - 7, s.busy ? ((t * 10 + i) % 8 | 0) + 1 : 4, 1, s.busy ? C.g : C.gd);
+      ctx.globalAlpha = 0.35; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(x - 2, y0 + 1, 7, 2, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+      px(x - 7, y - 14, 10, 9, '#d7dedb'); px(x - 5, y - 12, 6, 3, col);
+      px(x - 7, y - 23, 10, 8, '#e9eeeb'); px(x - 6, y - 21, 8, 3, '#0b1210');
+      if (Math.sin(t * 1.3 + i * 2) < 0.97) { px(x - 5, y - 20, 2, 1, s.err ? C.bad : col); px(x - 2, y - 20, 2, 1, s.err ? C.bad : col); }
+      px(x - 6, y - 5, 3, 5, '#2a3134'); px(x - 1, y - 5, 3, 5, '#2a3134');
+      ctx.fillStyle = selected === h.id ? C.g : '#9aa39e'; ctx.font = '400 6px Inter, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(h.name.length > 11 ? h.name.slice(0, 10) + '…' : h.name, x, y0 + 17); ctx.textAlign = 'left';
+    });
+  }
+  function hireAt(x, y) { const r = ROOMS.hires; let best = null, d0 = 30; hires.slice(0, 6).forEach((h, i) => { const [hx, hy] = hireSlot(r, i); const d = Math.hypot(x - hx, y - (hy - 10)); if (d < d0) { d0 = d; best = h.id; } }); return best; }
   function props(id, r) {
     if (id === 'ultron') return;
+    if (id === 'hires') { drawHires(r); return; }
     const s = state[id], b = s.busy;
     ctx.save(); ctx.translate(r.x, r.y); ctx.scale(PS, PS);
     const w = r.w / PS, h = r.h / PS, cx = w / 2, cy = h / 2 + 6;
@@ -544,6 +585,7 @@
     for (const [id, r] of Object.entries(ROOMS)) props(id, r);
     for (const [id, r] of Object.entries(ROOMS)) {
       if (id === 'ultron') continue;
+      if (id === 'hires') { placeBubble(id, r.x + r.w / 2, r.y + 30); continue; }
       crew(id, r, dt);
       updateLead(id, r, dt);
       drawLead(id, r);
@@ -591,6 +633,6 @@
     return { init, setActive: (v) => { active = !!v; } };
   })();
 
-  window.Station = { init, setBusy, packet, highlight, launchShuttle, focus, ROOMS, relayout: () => { placeLabels(); if (!focused) Object.assign(camT, { x: W / 2, y: H / 2, z: 1 }); } };
+  window.Station = { init, setBusy, packet, highlight, launchShuttle, focus, ROOMS, setHires, HIRE_CAP: 6, relayout: () => { placeLabels(); if (!focused) Object.assign(camT, { x: W / 2, y: H / 2, z: 1 }); } };
   window.Core = Core;
 })();

@@ -137,6 +137,7 @@ ipcMain.handle('keys:set', (_e, patch) => { const k = readKeys(); for (const [a,
 // ---------- network with retry ----------
 const inflight = new Map();
 ipcMain.on('claude:cancelAll', () => { for (const ac of inflight.values()) ac.abort(); inflight.clear(); });
+ipcMain.on('claude:cancel', (_e, ids) => { for (const id of ids || []) { const ac = inflight.get(id); if (ac) { ac.abort(); inflight.delete(id); } } });
 async function fetchRetry(url, opts, tries = 4) {
   let last;
   for (let i = 0; i < tries; i++) {
@@ -154,7 +155,7 @@ async function fetchRetry(url, opts, tries = 4) {
   throw last || new Error('Network error');
 }
 
-ipcMain.handle('claude:ask', async (e, { prompt, model, maxTokens, key, stream, reqId, images }) => {
+ipcMain.handle('claude:ask', async (e, { prompt, model, maxTokens, key, stream, reqId, images, web }) => {
   const k = key || readKeys().anthropic;
   if (!k) throw new Error('No Anthropic API key. Add it in Settings.');
   const ac = new AbortController(); inflight.set(reqId || Math.random(), ac);
@@ -162,7 +163,7 @@ ipcMain.handle('claude:ask', async (e, { prompt, model, maxTokens, key, stream, 
   const res = await fetchRetry('https://api.anthropic.com/v1/messages', {
     method: 'POST', signal: ac.signal,
     headers: { 'content-type': 'application/json', 'x-api-key': k, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: model || 'claude-sonnet-5-5', max_tokens: maxTokens || 4000, stream: !!stream, messages: [{ role: 'user', content: images?.length ? [...images.map((im) => ({ type: 'image', source: { type: 'base64', media_type: im.media_type || 'image/jpeg', data: im.data } })), { type: 'text', text: prompt }] : prompt }] }),
+    body: JSON.stringify({ model: model || 'claude-sonnet-5-5', max_tokens: maxTokens || 4000, stream: !!stream, ...(web ? { tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: Math.max(1, Math.min(10, Number(web) || 5)) }] } : {}), messages: [{ role: 'user', content: images?.length ? [...images.map((im) => ({ type: 'image', source: { type: 'base64', media_type: im.media_type || 'image/jpeg', data: im.data } })), { type: 'text', text: prompt }] : prompt }] }),
   });
   if (!res.ok) {
     const j = await res.json().catch(() => ({}));
@@ -171,12 +172,12 @@ ipcMain.handle('claude:ask', async (e, { prompt, model, maxTokens, key, stream, 
   if (!stream) {
     const j = await res.json().catch(() => ({}));
     const text = (j.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('');
-    return { text, usage: j.usage || {}, stop: j.stop_reason };
+    return { text, usage: { ...(j.usage || {}), searches: j.usage?.server_tool_use?.web_search_requests || 0 }, stop: j.stop_reason };
   }
   // server-sent events: forward text as it arrives so the agent feed can show it live
   const reader = res.body.getReader(), dec = new TextDecoder();
-  let buf = '', text = '', stop = null, pending = '', lastSend = 0;
-  const usage = { input_tokens: 0, output_tokens: 0 };
+  let buf = '', text = '', stop = null, pending = '', lastSend = 0, toolBuf = null;
+  const usage = { input_tokens: 0, output_tokens: 0, searches: 0 };
   const flush = (force) => {
     if (!pending || (!force && Date.now() - lastSend < 60)) return;
     if (!e.sender.isDestroyed()) e.sender.send('claude:delta', { reqId, delta: pending });
@@ -194,7 +195,10 @@ ipcMain.handle('claude:ask', async (e, { prompt, model, maxTokens, key, stream, 
       let d; try { d = JSON.parse(line.slice(5).trim()); } catch { continue; }
       if (d.type === 'message_start') usage.input_tokens = d.message?.usage?.input_tokens || 0;
       else if (d.type === 'content_block_delta' && d.delta?.type === 'text_delta') { text += d.delta.text; pending += d.delta.text; flush(false); }
-      else if (d.type === 'message_delta') { usage.output_tokens = d.usage?.output_tokens || usage.output_tokens; stop = d.delta?.stop_reason || stop; }
+      else if (d.type === 'message_delta') { usage.output_tokens = d.usage?.output_tokens || usage.output_tokens; usage.input_tokens = Math.max(usage.input_tokens, d.usage?.input_tokens || 0); usage.searches = d.usage?.server_tool_use?.web_search_requests || usage.searches; stop = d.delta?.stop_reason || stop; }
+      else if (d.type === 'content_block_start' && d.content_block?.type === 'server_tool_use') toolBuf = '';
+      else if (d.type === 'content_block_delta' && d.delta?.type === 'input_json_delta' && toolBuf != null) toolBuf += d.delta.partial_json || '';
+      else if (d.type === 'content_block_stop' && toolBuf != null) { let q = ''; try { q = JSON.parse(toolBuf || '{}').query || ''; } catch {} toolBuf = null; if (!e.sender.isDestroyed()) e.sender.send('claude:delta', { reqId, delta: '', search: q || 'the web' }); }
       else if (d.type === 'error') throw new Error(d.error?.message || 'Claude stream error');
     }
   }
@@ -233,6 +237,13 @@ ipcMain.handle('file:saveDir', async (_e, { files }) => {
   if (r.canceled || !r.filePaths[0]) return null;
   for (const f of files) fs.writeFileSync(path.join(r.filePaths[0], path.basename(f.name)), f.encoding === 'base64' ? Buffer.from(f.data, 'base64') : f.data);
   return r.filePaths[0];
+});
+ipcMain.handle('file:open', async (_e, { filters } = {}) => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: filters || [{ name: 'Kivo space', extensions: ['json'] }] });
+  if (r.canceled || !r.filePaths[0]) return null;
+  const f = r.filePaths[0];
+  if (fs.statSync(f).size > 2e6) throw new Error('That file is too big to be a Kivo space.');
+  return { name: path.basename(f), text: fs.readFileSync(f, 'utf8') };
 });
 ipcMain.on('open:url', (_e, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); });
 
