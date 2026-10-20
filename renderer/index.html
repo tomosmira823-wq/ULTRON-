@@ -44,7 +44,6 @@
       <div class="roster-foot">
         <div class="led-row"><span class="led" id="led-auto"></span><span id="auto-label">AUTOPILOT OFF</span></div>
         <div class="tiny" id="next-run"></div>
-        <button class="hw-btn wide" id="btn-auto">START AUTOPILOT</button>
       </div>
     </aside>
 
@@ -88,7 +87,7 @@
         <div class="row">
           <div class="field">
             <label class="lbl" for="count">DESIGNS</label>
-            <div class="stepper"><button id="cnt-dn" aria-label="Fewer">−</button><input id="count" type="number" min="1" max="12" value="3"><button id="cnt-up" aria-label="More">+</button></div>
+            <div class="stepper"><button id="cnt-dn" aria-label="Fewer">−</button><input id="count" type="number" min="1" max="25" value="3"><button id="cnt-up" aria-label="More">+</button></div>
           </div>
           <div class="field">
             <label class="lbl" for="tone">GARMENT</label>
@@ -101,10 +100,14 @@
           <option value="review">Review first · I approve before it goes live</option>
           <option value="design">Design only · no Printify</option>
         </select>
-        <div class="row">
-          <button class="hw-btn big go" id="btn-run">RUN MISSION</button>
-          <button class="hw-btn big" id="btn-abort" disabled>ABORT</button>
+        <div class="mc">
+          <button class="mc-run" id="btn-run">▶ RUN NOW</button>
+          <div class="mc-status" id="mc-status">Makes 3 designs now</div>
         </div>
+        <label class="auto-row" for="auto-switch">
+          <span class="switch"><input type="checkbox" id="auto-switch"><i></i></span>
+          <span class="auto-txt"><b>AUTOPILOT</b><span id="auto-desc">Off · the crew only works when you press Run</span></span>
+        </label>
       </div>
 
       <div class="cpane" id="cp-chat" hidden>

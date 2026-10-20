@@ -135,9 +135,12 @@ ipcMain.handle('keys:status', () => { const k = readKeys(); return { anthropic: 
 ipcMain.handle('keys:set', (_e, patch) => { const k = readKeys(); for (const [a, b] of Object.entries(patch)) { if (b === null) delete k[a]; else if (b) k[a] = b.trim(); } writeKeys(k); return true; });
 
 // ---------- network with retry ----------
+const inflight = new Map();
+ipcMain.on('claude:cancelAll', () => { for (const ac of inflight.values()) ac.abort(); inflight.clear(); });
 async function fetchRetry(url, opts, tries = 4) {
   let last;
   for (let i = 0; i < tries; i++) {
+    if (opts.signal?.aborted) throw new Error('ABORTED');
     try {
       const res = await fetch(url, opts);
       if ([429, 500, 502, 503, 504, 529].includes(res.status) && i < tries - 1) {
@@ -146,7 +149,7 @@ async function fetchRetry(url, opts, tries = 4) {
         continue;
       }
       return res;
-    } catch (e) { last = e; await new Promise((r) => setTimeout(r, 1500 * 2 ** i)); }
+    } catch (e) { if (e.name === 'AbortError' || opts.signal?.aborted) throw new Error('ABORTED'); last = e; await new Promise((r) => setTimeout(r, 1500 * 2 ** i)); }
   }
   throw last || new Error('Network error');
 }
@@ -154,8 +157,10 @@ async function fetchRetry(url, opts, tries = 4) {
 ipcMain.handle('claude:ask', async (e, { prompt, model, maxTokens, key, stream, reqId }) => {
   const k = key || readKeys().anthropic;
   if (!k) throw new Error('No Anthropic API key. Add it in Settings.');
+  const ac = new AbortController(); inflight.set(reqId || Math.random(), ac);
+  try {
   const res = await fetchRetry('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
+    method: 'POST', signal: ac.signal,
     headers: { 'content-type': 'application/json', 'x-api-key': k, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({ model: model || 'claude-sonnet-5-5', max_tokens: maxTokens || 4000, stream: !!stream, messages: [{ role: 'user', content: prompt }] }),
   });
@@ -195,6 +200,10 @@ ipcMain.handle('claude:ask', async (e, { prompt, model, maxTokens, key, stream, 
   }
   flush(true);
   return { text, usage, stop };
+  } catch (err) {
+    if (err.name === 'AbortError' || ac.signal.aborted) throw new Error('ABORTED');
+    throw err;
+  } finally { for (const [k, v] of inflight) if (v === ac) inflight.delete(k); }
 });
 
 ipcMain.handle('printify:req', async (_e, { method, url, body, key }) => {

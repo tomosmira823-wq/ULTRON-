@@ -72,7 +72,7 @@
   let keys = { anthropic: false, printify: false };
   let prefs = { closeToTray: true, openAtLogin: true };
   let running = false, abortFlag = false, logFilter = null, openId = null, syncing = false;
-  let feedAgent = null, lastPlan = null, lastTrends = [], courierRun = null;
+  let feedAgent = null, lastPlan = null, lastTrends = [], courierRun = null, progress = null, stopping = false;
   const cur = {};
   const agentState = {};
 
@@ -117,7 +117,7 @@
     agentState[id] = { status, text: text || '', err: !!err };
     Station.setBusy(id, status === 'WORKING', text || '', err);
     if (id === 'ultron') Core.setActive(status === 'WORKING');
-    renderRoster(); feedTouch(id); if (feedAgent === 'ultron') feedTouch('ultron');
+    renderRoster(); feedTouch(id); if (feedAgent === 'ultron') feedTouch('ultron'); if (running) renderControls();
   }
   function renderRoster() {
     const ul = $('#roster'); ul.textContent = '';
@@ -141,6 +141,7 @@
 
   // ---------- Claude ----------
   const live = {}, reqAgent = {}; let reqSeq = 0;
+  const cleanErr = (e) => String(e?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
   async function ask(prompt, { fast = false, maxTokens = 4000, agent = null, task = '', model: forceModel = null } = {}) {
     if (!keys.anthropic) throw new Error('Add your Anthropic API key in Settings.');
     rollDay();
@@ -149,7 +150,9 @@
     const reqId = ++reqSeq;
     if (agent) { live[agent] = { task, text: '', busy: true, at: Date.now() }; reqAgent[reqId] = agent; feedTouch(agent); }
     try {
-      const r = await kivo.ask({ prompt, model, maxTokens, stream: !!agent, reqId });
+      let r;
+    try { r = await kivo.ask({ prompt, model, maxTokens, stream: !!agent, reqId }); }
+    catch (e) { const m = cleanErr(e); throw new Error(/ABORTED/.test(m) ? 'ABORTED' : m); }
       if (agent) live[agent].text = r.text;
       D.day.tokens += (r.usage.input_tokens || 0) + (r.usage.output_tokens || 0);
       recordCost(agent, model, r.usage);
@@ -165,7 +168,7 @@
     if (a >= 0 && b > a) return JSON.parse(s.slice(a, b + 1));
     throw new Error('Agent returned unreadable data');
   }
-  const fatal = (e) => /API key|x-api-key|401|403|credit|billing|cap reached/i.test(e.message);
+  const fatal = (e) => /ABORTED|API key|x-api-key|401|403|credit|billing|cap reached/i.test(e.message);
   // ask for JSON; if the reply is malformed, repair it cheaply before re-asking
   const localRepair = (t) => t.replace(/[\u201c\u201d]/g, '"').replace(/,\s*([}\]])/g, '$1');
   async function askJSON(prompt, opts = {}) {
@@ -340,8 +343,9 @@ Reply with a JSON array of ${count} objects: {"phrase": "the words printed on th
       });
       renderPipeline(); persist();
 
+      let idx = 0;
       for (const p of items) {
-        checkAbort();
+        checkAbort(); progress = { i: ++idx, n: items.length, phrase: p.trend.phrase }; renderControls();
         if (await produceWithRetry(p, mode)) made.push(p); else parked++;
       }
       const live = made.filter((p) => p.status === 'published').length, rev = made.filter((p) => p.status === 'review').length;
@@ -358,6 +362,8 @@ Reply with a JSON array of ${count} objects: {"phrase": "the words printed on th
       for (const a of AGENTS) if (agentState[a.id]?.status === 'WORKING') setAgent(a.id, 'IDLE');
       $('#mission-chip').textContent = 'NO ACTIVE MISSION';
       renderAll(); persist();
+      if (missionQueue.length && !abortFlag) { const j = missionQueue.shift(); log('ultron', `Starting queued mission: ${j.n} designs.`); runMission(j.brief, j.n, j.opts); }
+      else if (abortFlag && missionQueue.length) { log('ultron', `Cleared ${missionQueue.length} queued mission(s) after abort.`, 'err'); missionQueue.length = 0; }
     }
   }
 
@@ -413,6 +419,13 @@ Rules:
     else if (p.svg && p.listing) { p.status = 'review'; p.reviewReason = `Stopped at ${p.lastStep || 'a late step'}: ${e.message}`; p.retryable = true; }
     else { p.status = 'failed'; p.error = e.message; p.retryable = !fatal(e); }
     renderPipeline(); persist();
+  }
+  async function retryAll() {
+    if (running) { toast('Wait for the current mission to finish.', true); return; }
+    abortFlag = false;
+    const list = D.products.filter((p) => p.retryable && ['failed', 'review'].includes(p.status) && p.trend);
+    log('ultron', `Retrying ${list.length} unfinished design${list.length > 1 ? 's' : ''}.`);
+    for (const p of list) { p.attempts = 0; await retryProduct(p); if (abortFlag) break; }
   }
   async function retryProduct(p) {
     running = true; uiRunning(true); p.status = 'working'; delete p.reviewReason; delete p.error; renderPipeline();
@@ -524,7 +537,7 @@ Reply with JSON only, issues kept under 12 words each, at most 5 issues: {"score
   }
 
   // ---------- Printify ----------
-  const pf = (url, method, body) => kivo.printify({ url, method, body });
+  const pf = (url, method, body) => kivo.printify({ url, method, body }).catch((e) => { throw new Error(cleanErr(e)); });
   function pfReady() {
     if (!keys.printify) return 'Connect Printify in Settings.';
     if (!D.settings.shopId) return 'Pick your Printify shop in Settings.';
@@ -716,10 +729,12 @@ Reply with JSON only, issues kept under 12 words each, at most 5 issues: {"score
   // ---------- ULTRON chat ----------
   function stateSummary() {
     const s = D.settings, by = {};
+    const now = running ? `A mission IS running right now (${$('#mission-chip').textContent}).` : 'No mission is running right now.';
     for (const p of D.products) by[p.status] = (by[p.status] || 0) + 1;
     const sales = D.orders.reduce((a, o) => a + o.sales, 0);
     const top = D.products.filter((p) => p.sales?.qty).sort((a, b) => b.sales.qty - a.sales.qty).slice(0, 5).map((p) => `${p.trend.phrase} (${p.sales.qty})`).join(', ');
-    return `Template: ${tpl().name}. Mode: ${MODES[s.mode]}. Autopilot: ${s.auto ? `on, every ${s.hours}h, ${s.acount} per run, max ${s.maxPerDay}/day` : 'off'}. QA bar ${s.qaMin}. Printify: ${keys.printify ? (s.shopId ? 'connected to ' + s.shopTitle : 'token set, no shop') : 'not connected'}. Product: ${s.blueprintTitle || 'none'} in ${s.colours}. Agent models: ${AI_AGENTS.map((a) => `${a} ${modelName(modelFor(a))}`).join(', ')}. AI spend today ${usd(D.day.usd || 0)} (${AI_AGENTS.map((a) => `${a} ${usd(costOf(a))}`).join(', ')}); all time ${usd(Object.values(D.cost?.all || {}).reduce((s, x) => s + x.usd, 0))}.
+    return `${now} Queued missions: ${missionQueue.length ? missionQueue.map((j) => j.n + ' designs').join(', ') : 'none'}.
+Template: ${tpl().name}. Mode: ${MODES[s.mode]}. Autopilot: ${s.auto ? `on, every ${s.hours}h, ${s.acount} per run, max ${s.maxPerDay}/day` : 'off'}. QA bar ${s.qaMin}. Printify: ${keys.printify ? (s.shopId ? 'connected to ' + s.shopTitle : 'token set, no shop') : 'not connected'}. Product: ${s.blueprintTitle || 'none'} in ${s.colours}. Agent models: ${AI_AGENTS.map((a) => `${a} ${modelName(modelFor(a))}`).join(', ')}. AI spend today ${usd(D.day.usd || 0)} (${AI_AGENTS.map((a) => `${a} ${usd(costOf(a))}`).join(', ')}); all time ${usd(Object.values(D.cost?.all || {}).reduce((s, x) => s + x.usd, 0))}.
 Products by status: ${JSON.stringify(by)}. Designs today: ${D.day.designs}. Orders: ${D.orders.length}, sales ${money(sales)}, profit ${money(D.orders.reduce((a, o) => a + orderProfit(o), 0))}. Best sellers: ${top || 'none yet'}.
 ${salesInsight()}
 Recent designs: ${D.products.slice(-10).map((p) => `${p.trend?.phrase} [${p.status}${p.qa ? ', QA ' + p.qa.score : ''}]`).join('; ')}`;
@@ -739,29 +754,54 @@ ${stateSummary()}
 Conversation:
 ${hist}
 Available actions (use only when the owner asks for them or clearly wants them):
-- {"type":"mission","brief":"...","count":1-12,"tone":"light"|"dark"} start designing now
+- {"type":"mission","brief":"...","count":1-25,"tone":"light"|"dark"} start designing now (if a mission is already running it is queued and starts automatically afterwards)
 - {"type":"autopilot","on":true|false}
 - {"type":"set","field":"mode"|"hours"|"acount"|"maxPerDay"|"qaMin"|"defaultBrief"|"colours","value":...}  mode is "auto","review" or "design"
 - {"type":"sync"} pull orders and sales now
 - {"type":"model","agent":"ultron"|"scout"|"forge"|"scribe"|"auditor"|"all","model":"opus"|"sonnet"|"haiku"} switch the Claude model an agent uses (Opus = best quality but roughly 2x Sonnet's cost; Haiku is about 20x cheaper than Sonnet; Haiku = fastest and cheapest, fine for checks)
 - {"type":"show","status":"review"|"published"|"ready"|"failed"|"all"} show those products in the terminal
+IMPORTANT: actions only happen if you put them in "actions". Never say you started, queued or changed something unless the matching action is in your list — the app confirms each action to the owner itself. If the owner asks for designs, always include a mission action.
 Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}`, { maxTokens: 1500, agent: 'ultron', task: 'Answering you' });
       D.chat.push({ role: 'ultron', text: String(r.reply || 'Done.'), ts: Date.now() });
       renderChat();
-      for (const a of r.actions || []) await doAction(a);
+      const acts = Array.isArray(r.actions) ? r.actions : r.actions ? [r.actions] : r.action ? [r.action] : [];
+      let started = false;
+      for (const a of acts) { if ((await doAction(a)) === 'mission') started = true; }
+      // safety net: the owner clearly asked for designs but no mission came back
+      const want = msg.match(/\b(make|create|design|do|run|generate|give me|knock out|start)\b[^.?!]*?\b(\d{1,2})\b[^.?!]*?\b(designs?|shirts?|tees?|t-?shirts?|products?|listings?)\b/i);
+      if (!started && want) await doAction({ type: 'mission', count: Number(want[2]), brief: msg });
     } catch (e) { D.chat.push({ role: 'ultron', text: 'Comms error: ' + e.message, ts: Date.now(), err: true }); renderChat(); }
     $('#chat-send').disabled = false;
     setAgent('ultron', running ? 'WORKING' : 'IDLE');
     persist();
   }
-  async function doAction(a) {
-    const s = D.settings;
+  const missionQueue = [];
+  function normAction(a) {
+    if (!a || typeof a !== 'object') return {};
+    const p = { ...a, ...(a.params || a.args || a.parameters || a.data || {}) };
+    let t = String(a.type || a.action || a.name || a.command || a.tool || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (/mission|design|create|make|generate|produce/.test(t)) t = 'mission';
+    else if (/autopilot/.test(t)) t = 'autopilot';
+    else if (/model/.test(t)) t = 'model';
+    else if (/sync|order/.test(t)) t = 'sync';
+    else if (/show|filter|view/.test(t)) t = 'show';
+    else if (/set|setting|update|change/.test(t)) t = 'set';
+    p.type = t;
+    p.count = p.count ?? p.designs ?? p.n ?? p.number ?? p.quantity ?? p.amount;
+    p.brief = p.brief ?? p.prompt ?? p.theme ?? p.topic ?? p.description;
+    if (t === 'autopilot' && p.on === undefined) p.on = p.enabled ?? p.value ?? !/pause|off|stop/.test(String(a.type || a.action));
+    return p;
+  }
+  async function doAction(raw) {
+    const s = D.settings, a = normAction(raw);
     const note = (t) => { D.chat.push({ role: 'sys', text: t, ts: Date.now() }); renderChat(); };
     if (a.type === 'mission') {
-      if (running) return note('A mission is already running — try again when it finishes.');
-      const n = Math.max(1, Math.min(12, Number(a.count) || s.acount));
+      const n = Math.max(1, Math.min(25, Number(a.count) || s.acount));
+      const job = { brief: String(a.brief || s.defaultBrief || tpl().brief), n, opts: { tone: a.tone === 'dark' ? 'dark' : a.tone === 'light' ? 'light' : undefined } };
+      if (running) { missionQueue.push(job); note(`▶ Queued: ${n} designs — starts as soon as the current job finishes (${missionQueue.length} in queue)`); return 'mission'; }
       note(`▶ Mission started: ${n} designs`);
-      runMission(String(a.brief || s.defaultBrief || tpl().brief), n, { tone: a.tone === 'dark' ? 'dark' : a.tone === 'light' ? 'light' : undefined });
+      runMission(job.brief, job.n, job.opts);
+      return 'mission';
     } else if (a.type === 'autopilot') { setAuto(!!a.on); note(`▶ Autopilot ${a.on ? 'on' : 'paused'}`); }
     else if (a.type === 'set') {
       const f = a.field, v = a.value;
@@ -777,6 +817,7 @@ Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}
       for (const ag of who) setAgentModel(ag, m, true);
       if (who.length) note(`▶ ${a.agent === 'all' ? 'All agents' : a.agent.toUpperCase()} now on ${modelName(m)}`);
     }
+    else if (!a.type) { note('⚠ ULTRON sent an action the app didn’t understand: ' + JSON.stringify(raw).slice(0, 120)); }
     else if (a.type === 'show') { $('#filter').value = ['review', 'published', 'ready', 'failed'].includes(a.status) ? a.status : 'all'; showTab('pipeline'); renderPipeline(); }
   }
   function renderChat() {
@@ -922,17 +963,28 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     $('#cmd-state').textContent = running ? 'Mission in progress.' : !keys.anthropic ? 'Offline — run setup.' : D.settings.auto ? 'Autopilot engaged.' : 'Standing by.';
   }
   function uiRunning(on) {
-    $('#btn-run').disabled = on; $('#btn-abort').disabled = !on;
-    $('#btn-run').textContent = on ? 'RUNNING…' : 'RUN MISSION';
-    renderCmd(); kivo.trayState({ running: on, autopilot: D.settings.auto });
+    if (!on) { progress = null; stopping = false; }
+    renderControls(); renderCmd(); kivo.trayState({ running: on, autopilot: D.settings.auto });
   }
+  function renderControls() {
+    const b = $('#btn-run'), st = $('#mc-status');
+    b.classList.toggle('stop', running); b.disabled = stopping;
+    b.textContent = stopping ? 'STOPPING…' : running ? '■ STOP' : '▶ RUN NOW';
+    const n = Math.max(1, Math.min(25, +$('#count').value || 3));
+    const who = AGENTS.find((a) => agentState[a.id]?.status === 'WORKING' && a.id !== 'ultron');
+    st.textContent = running
+      ? (progress ? `Design ${progress.i} of ${progress.n}` : 'Planning') + (who ? ` · ${who.name} ${String(agentState[who.id].text || '').replace(/^\w+ /, (m) => m.toLowerCase())}` : '') + (missionQueue.length ? ` · ${missionQueue.length} queued` : '')
+      : `Makes ${n} design${n > 1 ? 's' : ''} now · ${MODES[$('#mode').value] || ''}`.replace(/ · $/, '');
+  }
+
   function nextRun() { return (D.lastAuto || 0) + D.settings.hours * 3600e3; }
   function renderAuto() {
     const on = D.settings.auto;
     $('#led-auto').className = 'led' + (on ? ' on' : '');
     $('#auto-label').textContent = on ? `AUTOPILOT · EVERY ${D.settings.hours}H` : 'AUTOPILOT OFF';
-    $('#btn-auto').textContent = on ? 'PAUSE AUTOPILOT' : 'START AUTOPILOT';
-    $('#btn-auto').classList.toggle('go', !on);
+    $('#auto-switch').checked = on;
+    const nx = nextRun();
+    $('#auto-desc').textContent = on ? `On · ${D.settings.acount} designs every ${D.settings.hours}h · ${D.day.designs >= D.settings.maxPerDay ? 'daily limit reached' : 'next ' + (nx <= Date.now() ? 'any moment' : new Date(nx).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}` : 'Off · the crew only works when you press Run';
     if (on) {
       rollDay();
       const capped = D.day.designs >= D.settings.maxPerDay;
@@ -957,7 +1009,9 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     const fresh = D.orders.filter((o) => new Date(o.created).getTime() > (D.lastSeenOrders || 0));
     if (fresh.length && D.lastSeenOrders) add('good', `${fresh.length} new order${fresh.length > 1 ? 's' : ''} since you last looked · ${money(fresh.reduce((a, o) => a + o.sales, 0))}`, 'VIEW', () => { D.lastSeenOrders = Date.now(); showTab('orders'); persist(); renderNeeds(); });
     const failed = D.products.filter((p) => p.status === 'failed' && Date.now() - p.createdAt < DAY).length;
-    if (failed) add('warn', `${failed} design${failed > 1 ? 's' : ''} failed today. Check the comms log for why.`, 'LOG', () => showCtab('log'));
+    const retryable = D.products.filter((p) => p.retryable && ['failed', 'review'].includes(p.status) && p.trend);
+    if (retryable.length) add('warn', `${retryable.length} design${retryable.length > 1 ? 's' : ''} didn’t finish. The crew can pick them up where they stopped.`, 'RETRY ALL', retryAll);
+    else if (failed) add('warn', `${failed} design${failed > 1 ? 's' : ''} failed today. Check the comms log for why.`, 'LOG', () => showCtab('log'));
     if (keys.anthropic && !s.auto) add('info', 'Autopilot is off. The crew only works when you press Run.', 'START', () => setAuto(true));
     if (keys.anthropic && s.auto) {
       rollDay();
@@ -1459,18 +1513,14 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     $$('[data-url]').forEach((b) => (b.onclick = () => kivo.openUrl(b.dataset.url)));
 
     const cnt = $('#count');
-    $('#cnt-up').onclick = () => { cnt.value = Math.min(12, (+cnt.value || 1) + 1); saveUI(); };
+    $('#cnt-up').onclick = () => { cnt.value = Math.min(25, (+cnt.value || 1) + 1); saveUI(); };
     $('#cnt-dn').onclick = () => { cnt.value = Math.max(1, (+cnt.value || 1) - 1); saveUI(); };
     for (const s of ['#brief', '#count', '#tone']) $(s).addEventListener('change', saveUI);
     $('#mode').addEventListener('change', () => { D.settings.mode = $('#mode').value; persist(); renderCmd(); });
 
-    $('#btn-run').onclick = () => {
-      const brief = $('#brief').value.trim() || D.settings.defaultBrief || tpl().brief;
-      if (!brief) { toast('Write a mission brief first.', true); $('#brief').focus(); return; }
-      runMission(brief, Math.max(1, Math.min(12, +cnt.value || 3)), { tone: $('#tone').value, mode: $('#mode').value });
-    };
-    $('#btn-abort').onclick = () => { abortFlag = true; log('ultron', 'Abort requested — finishing current step…', 'err'); };
-    $('#btn-auto').onclick = () => setAuto(!D.settings.auto);
+    $('#btn-run').onclick = () => (running ? stopMission() : runFromUI());
+    $('#auto-switch').onchange = () => setAuto($('#auto-switch').checked);
+    for (const id of ['#count', '#mode']) $(id).addEventListener('input', renderControls);
     // window layout: crew roster, ULTRON panel and terminal can be closed / reopened / resized
     const PANELS = { roster: '.roster', cmd: '.commander', term: '.terminal' };
     const layout = () => { const L = (D.ui.layout = D.ui.layout || {}); for (const [k, v] of Object.entries({ roster: true, cmd: true, term: true, termH: 300 })) if (L[k] === undefined) L[k] = v; return L; };
@@ -1636,9 +1686,22 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     $('#btn-update').onclick = () => kivo.installUpdate?.();
     kivo.onDelta?.(({ reqId, delta }) => { const a = reqAgent[reqId]; if (a && live[a]) { live[a].text += delta; feedTouch(a); } });
     kivo.onTray?.((c) => {
-      if (c === 'run') $('#btn-run').click();
+      if (c === 'run' && !running) runFromUI();
       if (c === 'toggleAuto') setAuto(!D.settings.auto);
     });
+  }
+  function runFromUI() {
+    if (running) return;
+    const brief = $('#brief').value.trim() || D.settings.defaultBrief || tpl().brief;
+    if (!brief) { toast('Write a mission brief first.', true); $('#brief').focus(); return; }
+    runMission(brief, Math.max(1, Math.min(25, +$('#count').value || 3)), { tone: $('#tone').value, mode: $('#mode').value });
+  }
+  function stopMission() {
+    if (!running || stopping) return;
+    stopping = true; abortFlag = true; kivo.cancelAll?.();
+    const q = missionQueue.length; missionQueue.length = 0;
+    log('ultron', 'Stop requested — cancelling the current job' + (q ? ` and ${q} queued mission(s)` : '') + '.', 'err');
+    renderControls();
   }
   function saveUI() { D.ui = { ...D.ui, brief: $('#brief').value, count: +$('#count').value || 3, tone: $('#tone').value }; persist(); }
 
