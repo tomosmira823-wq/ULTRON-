@@ -26,6 +26,26 @@
     const hit = MODEL_CHOICES.find((m) => x.includes(m[1].split(' ')[0].toLowerCase()));
     return hit ? hit[0] : null;
   }
+  // Claude API list prices, USD per million tokens [input, output] (platform.claude.com/docs/en/about-claude/pricing)
+  const PRICES = { 'claude-opus-5-5': [4, 20], 'claude-sonnet-5-5': [2, 10], 'claude-haiku-5-5': [0.1, 0.5], 'claude-fable-5-1': [10, 50] };
+  function priceOf(model, inTok, outTok) {
+    let p = PRICES[model];
+    if (model === 'claude-haiku-5-5' && inTok > 100000) p = [0.5, 2.5];
+    if (!p) p = /opus/.test(model) ? [5, 25] : /haiku/.test(model) ? [1, 5] : [3, 15]; // older models: conservative estimate
+    return (inTok * p[0] + outTok * p[1]) / 1e6;
+  }
+  const usd = (n) => '$' + (n < 0.01 && n > 0 ? n.toFixed(4) : n < 1 ? n.toFixed(3) : n.toFixed(2));
+  function recordCost(agent, model, u) {
+    const inT = u.input_tokens || 0, outT = u.output_tokens || 0, c = priceOf(model, inT, outT), a = agent || 'other';
+    rollDay();
+    D.cost = D.cost || { all: {}, today: {} };
+    for (const bucket of [D.cost.all, D.cost.today]) { const x = bucket[a] = bucket[a] || { usd: 0, calls: 0, in: 0, out: 0 }; x.usd += c; x.calls++; x.in += inT; x.out += outT; }
+    D.day.usd = (D.day.usd || 0) + c;
+    const pid = agent && cur[agent]; const p = pid && D.products.find((x) => x.id === pid);
+    if (p && agent !== 'ultron') p.aiCost = (p.aiCost || 0) + c;
+    return c;
+  }
+  const costOf = (a, when = 'today') => D.cost?.[when]?.[a]?.usd || 0;
   const modelFor = (agent, fast) => (agent && D.settings.agentModels?.[agent]) || (fast ? D.settings.fast : D.settings.model);
   function setAgentModel(agent, model, quiet) {
     D.settings.agentModels = { ...D.settings.agentModels, [agent]: model };
@@ -41,7 +61,7 @@
     mode: 'review', currency: 'GBP', defaultCost: 11, minMargin: 25, vat: true,
     shopId: '', shopTitle: '', shopChannel: '', blueprintId: '', blueprintTitle: '', providerId: '', providerTitle: '',
     colours: 'White', variants: [],
-    auto: false, hours: 6, acount: 3, maxPerDay: 10, qaMin: 85, retireDays: 60, tokenCap: 0,
+    auto: false, hours: 6, acount: 3, maxPerDay: 10, qaMin: 85, retireDays: 60, tokenCap: 0, spendCap: 0,
     autoApprove: true, winners: true,
   };
   let D = {
@@ -73,7 +93,7 @@
   const tpl = () => TEMPLATES.find((t) => t.id === D.settings.template) || TEMPLATES[0];
   const notify = (t, b) => kivo.notify(t, b);
   function rollDay() {
-    if (D.day.date !== today()) { D.history[D.day.date] = { tokens: D.day.tokens, designs: D.day.designs }; D.day = { date: today(), tokens: 0, designs: 0 }; }
+    if (D.day.date !== today()) { D.history[D.day.date] = { tokens: D.day.tokens, designs: D.day.designs, usd: D.day.usd || 0 }; D.day = { date: today(), tokens: 0, designs: 0, usd: 0 }; if (D.cost) D.cost.today = {}; }
   }
 
   function log(agent, msg, kind) {
@@ -106,6 +126,7 @@
       const li = el('li', (s.status === 'WORKING' ? 'busy ' : '') + (logFilter === a.id ? 'sel' : ''));
       li.append(el('span', 'led ' + (s.err ? 'err' : s.status === 'WORKING' ? 'busy' : s.status === 'OFFLINE' ? '' : 'on')), el('span', 'nm', a.name), el('span', 'st', s.err ? 'FAULT' : s.status));
       li.append(el('span', 'rl', s.status === 'WORKING' && s.text ? s.text : a.role));
+      if (AI_AGENTS.includes(a.id)) li.append(el('span', 'cost', `${modelName(modelFor(a.id)).split(' ')[0]} · ${usd(costOf(a.id))} today`));
       li.title = a.role + ' — click to see only this agent in the comms log';
       li.onclick = () => selectAgent(a.id);
       ul.append(li);
@@ -123,7 +144,7 @@
   async function ask(prompt, { fast = false, maxTokens = 4000, agent = null, task = '', model: forceModel = null } = {}) {
     if (!keys.anthropic) throw new Error('Add your Anthropic API key in Settings.');
     rollDay();
-    if (D.settings.tokenCap && D.day.tokens >= D.settings.tokenCap) throw new Error('Daily token cap reached — raise it in Settings or wait until tomorrow.');
+    if (D.settings.spendCap && (D.day.usd || 0) >= D.settings.spendCap) throw new Error(`Daily spend cap of $${D.settings.spendCap} reached — raise it in Settings or wait until tomorrow.`);
     const model = forceModel || modelFor(agent, fast);
     const reqId = ++reqSeq;
     if (agent) { live[agent] = { task, text: '', busy: true, at: Date.now() }; reqAgent[reqId] = agent; feedTouch(agent); }
@@ -131,6 +152,7 @@
       const r = await kivo.ask({ prompt, model, maxTokens, stream: !!agent, reqId });
       if (agent) live[agent].text = r.text;
       D.day.tokens += (r.usage.input_tokens || 0) + (r.usage.output_tokens || 0);
+      recordCost(agent, model, r.usage);
       renderCmd(); persist();
       return r.text;
     } finally { if (agent) { live[agent].busy = false; delete reqAgent[reqId]; feedTouch(agent); } }
@@ -690,7 +712,7 @@ Reply with JSON only, issues kept under 12 words each, at most 5 issues: {"score
     for (const p of D.products) by[p.status] = (by[p.status] || 0) + 1;
     const sales = D.orders.reduce((a, o) => a + o.sales, 0);
     const top = D.products.filter((p) => p.sales?.qty).sort((a, b) => b.sales.qty - a.sales.qty).slice(0, 5).map((p) => `${p.trend.phrase} (${p.sales.qty})`).join(', ');
-    return `Template: ${tpl().name}. Mode: ${MODES[s.mode]}. Autopilot: ${s.auto ? `on, every ${s.hours}h, ${s.acount} per run, max ${s.maxPerDay}/day` : 'off'}. QA bar ${s.qaMin}. Printify: ${keys.printify ? (s.shopId ? 'connected to ' + s.shopTitle : 'token set, no shop') : 'not connected'}. Product: ${s.blueprintTitle || 'none'} in ${s.colours}. Agent models: ${AI_AGENTS.map((a) => `${a} ${modelName(modelFor(a))}`).join(', ')}.
+    return `Template: ${tpl().name}. Mode: ${MODES[s.mode]}. Autopilot: ${s.auto ? `on, every ${s.hours}h, ${s.acount} per run, max ${s.maxPerDay}/day` : 'off'}. QA bar ${s.qaMin}. Printify: ${keys.printify ? (s.shopId ? 'connected to ' + s.shopTitle : 'token set, no shop') : 'not connected'}. Product: ${s.blueprintTitle || 'none'} in ${s.colours}. Agent models: ${AI_AGENTS.map((a) => `${a} ${modelName(modelFor(a))}`).join(', ')}. AI spend today ${usd(D.day.usd || 0)} (${AI_AGENTS.map((a) => `${a} ${usd(costOf(a))}`).join(', ')}); all time ${usd(Object.values(D.cost?.all || {}).reduce((s, x) => s + x.usd, 0))}.
 Products by status: ${JSON.stringify(by)}. Designs today: ${D.day.designs}. Orders: ${D.orders.length}, sales ${money(sales)}, profit ${money(D.orders.reduce((a, o) => a + orderProfit(o), 0))}. Best sellers: ${top || 'none yet'}.
 ${salesInsight()}
 Recent designs: ${D.products.slice(-10).map((p) => `${p.trend?.phrase} [${p.status}${p.qa ? ', QA ' + p.qa.score : ''}]`).join('; ')}`;
@@ -714,7 +736,7 @@ Available actions (use only when the owner asks for them or clearly wants them):
 - {"type":"autopilot","on":true|false}
 - {"type":"set","field":"mode"|"hours"|"acount"|"maxPerDay"|"qaMin"|"defaultBrief"|"colours","value":...}  mode is "auto","review" or "design"
 - {"type":"sync"} pull orders and sales now
-- {"type":"model","agent":"ultron"|"scout"|"forge"|"scribe"|"auditor"|"all","model":"opus"|"sonnet"|"haiku"} switch the Claude model an agent uses (Opus = best quality but roughly 5x Sonnet's cost; Haiku = fastest and cheapest, fine for checks)
+- {"type":"model","agent":"ultron"|"scout"|"forge"|"scribe"|"auditor"|"all","model":"opus"|"sonnet"|"haiku"} switch the Claude model an agent uses (Opus = best quality but roughly 2x Sonnet's cost; Haiku is about 20x cheaper than Sonnet; Haiku = fastest and cheapest, fine for checks)
 - {"type":"show","status":"review"|"published"|"ready"|"failed"|"all"} show those products in the terminal
 Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}`, { maxTokens: 1500, agent: 'ultron', task: 'Answering you' });
       D.chat.push({ role: 'ultron', text: String(r.reply || 'Done.'), ts: Date.now() });
@@ -848,7 +870,7 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     const units = D.orders.reduce((s, o) => s + o.items.reduce((a, i) => a + i.qty, 0), 0);
     const live = D.products.filter((p) => p.status === 'published').length;
     const tiles = el('div', 'tiles');
-    for (const [k, v] of [['SALES', money(sales)], ['PROFIT', money(profit)], ['ORDERS', D.orders.length], ['SHIRTS SOLD', units], ['LIVE LISTINGS', live], ['AVG ORDER', D.orders.length ? money(sales / D.orders.length) : '—']]) {
+    for (const [k, v] of [['SALES', money(sales)], ['PROFIT', money(profit)], ['ORDERS', D.orders.length], ['SHIRTS SOLD', units], ['LIVE LISTINGS', live], ['AVG ORDER', D.orders.length ? money(sales / D.orders.length) : '—'], ['AI COST TODAY', usd(D.day.usd || 0)]]) {
       const t = el('div', 'tile'); t.append(el('label', '', k), el('b', '', String(v))); tiles.append(t);
     }
     const cols = el('div', 'stat-cols');
@@ -862,8 +884,20 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     const mx = Math.max(1, ...days.map((d) => d[1]));
     for (const [d, n] of days) { const b = el('div', 'bar'); const f = el('i'); f.style.height = (n / mx * 100) + '%'; b.title = `${d}: ${n}`; b.append(f, el('span', '', d.slice(8))); bars.append(b); }
     act.append(bars);
+    const ag = el('div', 'stat-col'); ag.append(el('div', 'lbl', 'AI COST BY AGENT (USD)'));
+    const tb = el('table', 'cost-table'); tb.innerHTML = '<thead><tr><th>AGENT</th><th>MODEL</th><th>TODAY</th><th>ALL TIME</th><th>CALLS</th><th>PER JOB</th></tr></thead>';
+    const body = el('tbody');
+    let totT = 0, totA = 0;
+    for (const a of AI_AGENTS) {
+      const t = D.cost?.today?.[a], al = D.cost?.all?.[a]; totT += t?.usd || 0; totA += al?.usd || 0;
+      const tr = el('tr'); tr.append(el('td', '', a.toUpperCase()), el('td', '', modelName(modelFor(a))), el('td', 'n', usd(t?.usd || 0)), el('td', 'n', usd(al?.usd || 0)), el('td', 'n', String(al?.calls || 0)), el('td', 'n', usd(al?.calls ? al.usd / al.calls : 0)));
+      body.append(tr);
+    }
+    const designs = D.products.filter((p) => p.aiCost);
+    const tr = el('tr', 'tot'); tr.append(el('td', '', 'TOTAL'), el('td', '', ''), el('td', 'n', usd(totT)), el('td', 'n', usd(totA)), el('td', '', ''), el('td', 'n', designs.length ? usd(designs.reduce((s, p) => s + p.aiCost, 0) / designs.length) + '/design' : '—'));
+    body.append(tr); tb.append(body); ag.append(tb);
     cols.append(top, act);
-    box.append(tiles, cols);
+    box.append(tiles, cols, ag);
   }
   function renderReadouts() {
     const sales = D.orders.reduce((s, o) => s + o.sales, 0);
@@ -877,7 +911,7 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
   function renderCmd() {
     $('#cmd-template').textContent = (D.settings.shopName || tpl().name);
     $('#cmd-mode').textContent = MODES[D.settings.mode];
-    const t = D.day.tokens; $('#cmd-tokens').textContent = (t > 9999 ? (t / 1000).toFixed(1) + 'k' : t) + (D.settings.tokenCap ? ' / ' + (D.settings.tokenCap / 1000).toFixed(0) + 'k' : '');
+    $('#cmd-tokens').textContent = usd(D.day.usd || 0) + (D.settings.spendCap ? ' / $' + D.settings.spendCap : '');
     $('#cmd-state').textContent = running ? 'Mission in progress.' : !keys.anthropic ? 'Offline — run setup.' : D.settings.auto ? 'Autopilot engaged.' : 'Standing by.';
   }
   function uiRunning(on) {
@@ -971,9 +1005,12 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
         head.append(sel);
       }
       const x = el('button', 'wc close', '✕'); x.title = 'Back to the station'; x.onclick = () => selectAgent(null); head.append(x);
-      box.append(head, el('div', 'feed-now'), el('div', 'feed-widget'), el('div', 'lbl', 'LIVE OUTPUT'), el('pre', 'feed-term'), el('div', 'lbl', 'RECENT'), el('div', 'feed-recent'));
+      if (AI_AGENTS.includes(feedAgent)) { const c = el('div', 'feed-cost'); box.append(head, c); } else box.append(head);
+      box.append(el('div', 'feed-now'), el('div', 'feed-widget'), el('div', 'lbl', 'LIVE OUTPUT'), el('pre', 'feed-term'), el('div', 'lbl', 'RECENT'), el('div', 'feed-recent'));
     }
     const working = st.status === 'WORKING';
+    const fc = box.querySelector('.feed-cost');
+    if (fc) { const t = D.cost?.today?.[feedAgent], al = D.cost?.all?.[feedAgent]; fc.textContent = `COST TODAY ${usd(t?.usd || 0)} · ${t?.calls || 0} calls   ·   ALL TIME ${usd(al?.usd || 0)}   ·   avg ${usd(al?.calls ? al.usd / al.calls : 0)} per job`; }
     box.querySelector('.feed-head .led').className = 'led ' + (st.err ? 'err' : working ? 'busy' : st.status === 'OFFLINE' ? '' : 'on');
     box.querySelector('.feed-now').textContent = working ? '▶ ' + (st.text || L?.task || 'Working') : (st.status === 'OFFLINE' ? 'Offline — add your Claude key in Settings.' : 'Idle. ' + (L?.task ? 'Last job: ' + L.task : 'Waiting for orders from ULTRON.'));
     const term = box.querySelector('.feed-term');
@@ -1161,6 +1198,8 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     row('Price', money(L.price)); row('Production cost', money(-L.cost));
     row('Etsy listing fee', money(-L.listing)); row('Etsy transaction 6.5%', money(-L.transaction)); row('Payment processing', money(-L.processing));
     row(`Profit per sale (${(L.margin * 100).toFixed(0)}%)`, money(L.profit), 'tot' + (L.profit < 0 ? ' neg' : ''));
+    const pp = D.products.find((x) => x.id === openId);
+    if (pp?.aiCost) row('AI cost to make this design (one-off, USD)', usd(pp.aiCost), 'dim');
     $('#d-tlen').textContent = `${$('#d-ltitle').value.length}/140`;
   }
   async function drawerSave(silent) {
@@ -1365,7 +1404,7 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     ts.value = s.template;
     $('#s-shopname').value = s.shopName; $('#s-voice').value = s.voice || tpl().voice; $('#s-defbrief').value = s.defaultBrief || tpl().brief;
     $('#s-mode').value = s.mode; $('#s-hours').value = s.hours; $('#s-acount').value = s.acount; $('#s-cap').value = s.maxPerDay;
-    $('#s-qa').value = s.qaMin; $('#s-retire').value = s.retireDays; $('#s-tokcap').value = s.tokenCap;
+    $('#s-qa').value = s.qaMin; $('#s-retire').value = s.retireDays; $('#s-tokcap').value = s.spendCap;
     $('#s-approve').checked = s.autoApprove; $('#s-winners').checked = s.winners;
     $('#s-login').checked = prefs.openAtLogin; $('#s-tray').checked = prefs.closeToTray;
     const am = $('#s-agent-models'); am.textContent = '';
@@ -1541,7 +1580,7 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
       keys = await kivo.keyStatus();
       s.template = $('#s-template').value; s.shopName = $('#s-shopname').value.trim(); s.voice = $('#s-voice').value.trim(); s.defaultBrief = $('#s-defbrief').value.trim();
       s.mode = $('#s-mode').value; s.hours = Math.max(1, +$('#s-hours').value || 6); s.acount = Math.max(1, Math.min(12, +$('#s-acount').value || 3)); s.maxPerDay = Math.max(1, +$('#s-cap').value || 10);
-      s.qaMin = Math.max(0, Math.min(100, +$('#s-qa').value || 0)); s.retireDays = Math.max(0, +$('#s-retire').value || 0); s.tokenCap = Math.max(0, +$('#s-tokcap').value || 0);
+      s.qaMin = Math.max(0, Math.min(100, +$('#s-qa').value || 0)); s.retireDays = Math.max(0, +$('#s-retire').value || 0); s.spendCap = Math.max(0, +$('#s-tokcap').value || 0);
       s.autoApprove = $('#s-approve').checked; s.winners = $('#s-winners').checked;
       s.agentModels = { ...s.agentModels }; for (const ag of AI_AGENTS) s.agentModels[ag] = $('#s-am-' + ag).value;
       s.currency = $('#s-cur').value; s.defaultCost = Number($('#s-cost').value) || DEFAULTS.defaultCost; s.minMargin = Number($('#s-minm').value) || 0; s.vat = $('#s-vat').checked;

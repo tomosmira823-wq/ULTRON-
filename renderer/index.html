@@ -66,7 +66,7 @@
           <div class="tiny" id="cmd-state">Standing by.</div>
           <div class="kv"><span>SHOP</span><b id="cmd-template">—</b></div>
           <div class="kv"><span>MODE</span><b id="cmd-mode">—</b></div>
-          <div class="kv"><span>TOKENS TODAY</span><b id="cmd-tokens">0</b></div>
+          <div class="kv"><span>AI COST TODAY</span><b id="cmd-tokens">0</b></div>
         </div>
       </div>
       <nav class="tabs ctabs">
@@ -299,7 +299,7 @@
       <div class="row">
         <div class="field"><label class="lbl" for="s-qa">AUTO-PUBLISH MIN QA</label><input id="s-qa" type="number" min="0" max="100"></div>
         <div class="field"><label class="lbl" for="s-retire">RETIRE IF NO SALES AFTER (DAYS, 0 = never)</label><input id="s-retire" type="number" min="0"></div>
-        <div class="field"><label class="lbl" for="s-tokcap">MAX TOKENS PER DAY (0 = no cap)</label><input id="s-tokcap" type="number" min="0" step="10000"></div>
+        <div class="field"><label class="lbl" for="s-tokcap">MAX AI SPEND PER DAY ($, 0 = no cap)</label><input id="s-tokcap" type="number" min="0" step="0.5"></div>
       </div>
       <label class="chk"><input type="checkbox" id="s-approve"> Send new orders to print automatically</label>
       <label class="chk"><input type="checkbox" id="s-winners"> Make variations of best sellers</label>
@@ -309,7 +309,7 @@
       <h3 class="engr sm">CLAUDE</h3>
       <label class="lbl" for="s-akey">ANTHROPIC API KEY <span class="dim" id="s-akey-st"></span></label>
       <input id="s-akey" type="password" placeholder="leave blank to keep current" autocomplete="off">
-      <div class="lbl">MODEL PER AGENT · Opus = best quality, ~5× the cost of Sonnet · Haiku = fastest, cheapest</div>
+      <div class="lbl">MODEL PER AGENT · Opus = best quality, ~2× Sonnet’s price · Haiku = fastest, ~20× cheaper than Sonnet</div>
       <div class="row wrap agent-models" id="s-agent-models"></div>
 
       <h3 class="engr sm">PRINTIFY → ETSY</h3>

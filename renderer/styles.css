@@ -421,3 +421,13 @@ tr.click:hover td { background: rgba(70,255,154,.04); }
 .deck.map-max .feed { width: 36%; }
 #station { cursor: grab; }
 @media (max-width: 1300px) { .station-head .map-hint { display: none; } }
+/* costs */
+#roster .cost { grid-column: 2 / 4; font: 13px/1 var(--f-term); color: #8fd9ad; }
+.feed-cost { font: 14px/1.2 var(--f-term); color: #8fd9ad; padding: 4px 8px; background: rgba(70,255,154,.05); border: 1px solid rgba(70,255,154,.12); border-radius: 2px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.cost-table { width: 100%; border-collapse: collapse; font: 15px/1.2 var(--f-term); }
+.cost-table th { text-align: left; font: 400 7px/1 var(--f-display); letter-spacing: .12em; color: var(--ink-dim); padding: 5px 8px; border-bottom: 1px solid rgba(70,255,154,.2); }
+.cost-table td { padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,.04); font-variant-numeric: tabular-nums; }
+.cost-table td.n { text-align: right; color: var(--accent); }
+.cost-table tr.tot td { color: #e7ece9; border-top: 1px solid rgba(70,255,154,.25); }
+.ledger .r.dim { color: var(--ink-dim); font-size: 14px; }
+.tiles { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); }
