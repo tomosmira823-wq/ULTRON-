@@ -362,6 +362,7 @@
       ctx.restore();
     }
     function wallCard(wall, s0, s1, z0, z1, item, k) {
+      if (room && !item) return; // rooms only hang real work on the walls, no empty frames
       const p00 = wallBasis(wall, s0, z0), p10 = wallBasis(wall, s1, z0), p11 = wallBasis(wall, s1, z1), p01 = wallBasis(wall, s0, z1);
       const quad = wall === 'right' ? [p01, p11, p10, p00] : [p11, p01, p00, p10];
       poly(quad, T.card, item ? T.a2(0.85) : T.a(0.35), 1.2, item ? 10 : 0);

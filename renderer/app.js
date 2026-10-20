@@ -1737,6 +1737,20 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     }, 'Loading variants…');
     $('#s-colours').addEventListener('input', () => { D.settings.colours = $('#s-colours').value; varMsg(); });
     $('#s-wizard').onclick = () => { $('#settings').hidden = true; openWizard(1); };
+    $('#s-fresh-rooms').onclick = async () => {
+      if (window.SP?.anyRunning) { toast('Stop the room that is working first.', true); return; }
+      const n = (D.spaces?.list || []).length, h = (D.spaces?.hires?.store || []).length + (D.spaces?.hires?.marketing || []).length;
+      if (!confirm(`Remove all ${n} rooms and ${h} hired bots? Store and Marketing stay. This can't be undone.`)) return;
+      D.spaces = { list: [], hires: { store: [], marketing: [] }, notes: {} }; D.ui.dept = 'store';
+      await kivo.save(D); location.reload();
+    };
+    $('#s-fresh-all').onclick = async () => {
+      if (running || window.MK?.running || window.SP?.anyRunning) { toast('Stop whatever is running first.', true); return; }
+      if (!confirm('Wipe everything: designs, orders, posts, rooms, hires, chat, logs and cost history? Your API keys, connected accounts and settings stay. This can\'t be undone.')) return;
+      if (!confirm('Last check: wipe it all and start fresh?')) return;
+      const keep = { products: [], settings: D.settings, setupDone: D.setupDone, ui: { dept: 'store', count: D.ui.count, tone: D.ui.tone, brief: '' }, mk: D.mk ? { settings: D.mk.settings, accounts: D.mk.accounts } : undefined };
+      await kivo.save(keep); location.reload();
+    };
 
     $('#s-save').onclick = async () => {
       const s = D.settings;
