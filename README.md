@@ -2,30 +2,19 @@
 
 A suite of AI departments ("spaces"). **STORE** designs and sells Etsy print-on-demand shirts; **MARKETING** promotes them on Instagram, TikTok and Pinterest; and you can **build your own spaces** with their own teams of bots. ULTRON runs them all.
 
-## Spaces (2.1)
-- **+ SPACE** in the title bar opens the Space Builder. Start from a template (Sales Team, YouTube Studio, Research Lab, Finance Desk, Trading Research, Customer Service, Dev Team, Life Admin, Product Lab) or a blank space, or describe what it's for and press **Design the team**.
-- Each space gets its own isometric office floor in its own colour, with up to 18 bots at desks. Click any bot to watch it work live.
-- Bots run in order, each building on the work before it. ULTRON plans each job and gives every bot its instruction.
-- Per bot: name, team, job, Claude model, and tools: **web search** (Claude's server-side web search, about 1p per search), store data, marketing data, and past outputs. Tick **I approve its work** to pause the run for your OK or a redo with a note.
-- Finished outputs land in the terminal (formatted, copy or save as Markdown) and hang on the office walls. Each space can run on autopilot every N hours.
-- **Hire bots into Store or Marketing** too: they get desks (6 in the Store's NEW HIRES annex, 5 on the Marketing floor), review every mission or campaign, and their notes feed into the next run.
-- Tell ULTRON in chat: "hire me 2 bots to check my prices", "build me a sales team", "run the sales team on barbers in Knutsford".
-- Export a space to a `.kivo-space.json` file and import it on another PC.
-- **Floor styles (2.2):** Neon office, Trading floor (ticker wall, chart screens), Studio (foam walls, ON AIR sign, mics), Lab (glass walls, helix), Print shop (hazard lines, gear) and Space station (star windows, globe). Pick one per space in the builder; Store and Marketing styles are in Settings. The Store now opens as an isometric print shop with your designs on the walls; the classic pixel station is still there in Settings.
-- Trading Research is research and a paper-trade journal only: it never places real trades and isn't financial advice.
-
-An autonomous AI commerce station for Windows. Eight Claude-powered agents run an Etsy print-on-demand line from a pixel-art space station:
-
-| Agent | Job |
-|---|---|
-| ULTRON | Commander: turns your brief into a mission and delegates |
-| ANALYST | Reads your Printify orders and feeds back what sells |
-| SCOUT | Finds sellable niches and phrases |
-| FORGE | Draws original print-ready artwork (exported at 4500×5400 PNG) |
-| SCRIBE | Writes the Etsy title, 13 tags and description |
-| AUDITOR | Checks trademarks, spelling and Etsy rules |
-| LEDGER | Works out Etsy fees, cost, price and margin |
-| COURIER | Uploads to Printify and publishes to your Etsy shop |
+## Rooms (2.3)
+- **+ ROOM** in the title bar opens the room picker. Each room is a hand-made layout with its own furniture and a ready crew:
+  - **Podcast Studio:** round table with mics, cameras, softbox lights, a glass control room and a green room. Crew: Showrunner, Guest Researcher, Question Writer, Show Notes, Clip Picker, Promo Writer.
+  - **Video Studio:** green-screen set, writers' room, edit bay and a thumbnail wall.
+  - **Trading Floor:** triple-monitor desks, a candle-chart video wall, ticker, world clocks and a glass risk office. Research and paper trades only.
+  - **Sales Office:** headset call pods, a pipeline board, a THIS WEEK screen and a deal gong.
+  - **Research Lab:** lab benches, a library wall and a holo-helix.
+  - **Dev Studio:** dual-screen desks, blinking server racks, a kanban wall and a break area.
+- The **Store** now runs in its own Print Shop room: printers, a shirt rail, packing table and your designs on the walls (classic pixel station still in Settings).
+- Bots run in order, each building on the last; ULTRON plans each job. Web search, store/marketing data and past outputs are per-bot tools. Tick "I approve its work" to pause for your OK.
+- Every room has spare desks: **+ HIRE A BOT** fills them. Store and Marketing take 6 hires each, and hires' notes feed into the next run.
+- Tell ULTRON: "add a podcast studio", "hire me 2 bots to check my prices", "run the sales office on barbers in Knutsford".
+- Export a room to a `.kivo-space.json` file and import it on another PC.
 
 ## Install
 Download `Kivo-Ultron-Setup-x.y.z.exe` from [Releases](../../releases/latest). The app updates itself from this repo's releases.

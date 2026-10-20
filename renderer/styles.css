@@ -622,3 +622,13 @@ body[data-dept="space"] .glass { background: radial-gradient(120% 90% at 50% 0%,
 .dept-mi span { font-size: 11px; color: var(--ink-dim); }
 .dept-mi.new { display: block; text-align: center; font: 400 8px/1 var(--f-display); letter-spacing: .14em; color: var(--accent); }
 body[data-dept="space"] .roster-foot { display: none; }
+
+.room-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.room-card { --sp: var(--accent); display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 0 0 10px; background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.08); border-top: 3px solid var(--sp); border-radius: 4px; overflow: hidden; }
+.room-card img { width: 100%; aspect-ratio: 480 / 280; object-fit: cover; display: block; background: #000; margin-bottom: 4px; }
+.room-card b { font: 400 10px/1.2 var(--f-display); letter-spacing: .12em; color: #eef; padding: 0 10px; }
+.room-card span { font-size: 11.5px; color: var(--ink-dim); line-height: 1.35; padding: 0 10px; }
+.room-card i { font: 400 7px/1 var(--f-display); letter-spacing: .12em; color: var(--sp); font-style: normal; padding: 0 10px; }
+.room-card:hover { border-color: color-mix(in srgb, var(--sp) 60%, transparent); }
+.room-card.on { border-color: var(--sp); box-shadow: 0 0 16px color-mix(in srgb, var(--sp) 30%, transparent); background: color-mix(in srgb, var(--sp) 7%, rgba(0,0,0,.3)); }
+.room-card.on b { color: var(--sp); }

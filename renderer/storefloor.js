@@ -11,9 +11,9 @@
     { id: 'auditor', name: 'Auditor', team: 'Quality', icon: 'check' },
     { id: 'courier', name: 'Courier', team: 'Shipping', icon: 'send' },
   ];
-  const iso = OfficeKit.create({ hue: 148, style: 'workshop', chiefTitle: 'ULTRON · COMMANDER', chiefIdle: 'Awaiting orders', headL: 'YOUR SHOP', headR: 'DESIGN WALL' });
-  iso.configure({ agents: CREW });
-  let floor = 'workshop', on = false;
+  const iso = OfficeKit.create({ hue: 148, chiefTitle: 'ULTRON · COMMANDER', chiefIdle: 'Awaiting orders', headL: 'YOUR SHOP', headR: 'DESIGN WALL' });
+  iso.configure({ room: Rooms.get('store'), agents: CREW });
+  let floor = 'printshop', on = false;
   const $ = (s) => document.querySelector(s);
   function apply() {
     const cls = floor === 'classic';
@@ -33,7 +33,7 @@
     setHires(list) { classic.setHires(list); iso.setExtras(list); },
     ROOMS: classic.ROOMS,
     show(v) { on = !!v; apply(); },
-    setFloor(f) { floor = f === 'classic' ? 'classic' : OfficeKit.STYLES[f] ? f : 'workshop'; if (floor !== 'classic') iso.configure({ style: floor }); apply(); },
+    setFloor(f) { floor = f === 'classic' ? 'classic' : 'printshop'; apply(); },
     get floor() { return floor; },
     setWalls(media, headL, headR) { iso.setMedia(media); iso.setHeaders(headL, headR); },
   };

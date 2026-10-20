@@ -18,7 +18,7 @@
     <nav class="depts" id="depts" aria-label="Departments">
       <button class="dept on" data-dept="store">STORE</button>
       <button class="dept" data-dept="marketing">MARKETING</button>
-      <button class="dept add" id="dept-add" title="Build your own space with its own team of bots">+ SPACE</button>
+      <button class="dept add" id="dept-add" title="Add a ready-made room with its own crew">+ ROOM</button>
     </nav>
     <div class="readouts" id="readouts">
       <div class="ro"><label>SALES</label><b id="ro-sales">—</b></div>
@@ -173,7 +173,7 @@
         <textarea id="sp-brief" rows="4" spellcheck="false"></textarea>
         <div class="row">
           <button class="hw-btn" id="sp-hire-btn">+ HIRE A BOT</button>
-          <button class="hw-btn" id="sp-edit-btn">EDIT SPACE</button>
+          <button class="hw-btn" id="sp-edit-btn">EDIT ROOM</button>
         </div>
         <div class="mc">
           <button class="mc-run sp" id="sp-run">▶ RUN</button>
@@ -256,7 +256,7 @@
      </div>
      <div id="term-sp" class="term-inner" hidden>
       <div class="term-head">
-        <h2 class="engr">SPACE TERMINAL</h2>
+        <h2 class="engr">ROOM TERMINAL</h2>
         <nav class="tabs" id="sp-tabs">
           <button class="tab on" data-sp="outputs">OUTPUTS</button>
           <button class="tab" data-sp="team">TEAM</button>
@@ -423,7 +423,6 @@
       <label class="chk"><input type="checkbox" id="s-tray"> Keep running in the tray when I close the window</label>
       <div class="row">
         <div class="field"><label class="lbl" for="s-floor">STORE FLOOR</label><select id="s-floor"></select></div>
-        <div class="field"><label class="lbl" for="s-mkfloor">MARKETING FLOOR</label><select id="s-mkfloor"></select></div>
       </div>
 
       <h3 class="engr sm">CLAUDE</h3>
@@ -505,19 +504,19 @@
   <div class="sheet metal screws">
     <div class="sheet-head"><h2 class="engr" id="sb-title">NEW SPACE</h2><button class="wc close" id="sb-close" aria-label="Close">&#x2715;</button></div>
     <div class="sheet-body">
-      <div class="lbl" id="sb-tpl-l">START FROM</div>
+      <div class="lbl" id="sb-tpl-l">PICK A ROOM</div>
       <div class="tpl-grid sb-tpls" id="sb-tpls"></div>
       <div class="row">
         <div class="field"><label class="lbl" for="sb-name">NAME</label><input id="sb-name" type="text" maxlength="24" placeholder="e.g. Sales Team"></div>
-        <div class="field"><label class="lbl" for="sb-style">FLOOR</label><select id="sb-style"></select></div>
-        <div class="field"><div class="lbl">COLOUR</div><div class="hues" id="sb-hues"></div></div>
+        <div class="field" id="sb-style-f"><label class="lbl" for="sb-style">FLOOR</label><select id="sb-style"></select></div>
+        <div class="field" id="sb-hues-f"><div class="lbl">COLOUR</div><div class="hues" id="sb-hues"></div></div>
       </div>
-      <label class="lbl" for="sb-mission">WHAT IS THIS SPACE FOR?</label>
+      <label class="lbl" for="sb-mission">WHAT IS THIS ROOM FOR?</label>
       <textarea id="sb-mission" rows="2" placeholder="e.g. Find local businesses that need a new website and write outreach emails"></textarea>
       <label class="lbl" for="sb-brief">FIRST BRIEF (OPTIONAL)</label>
       <textarea id="sb-brief" rows="2"></textarea>
       <div class="row sb-bar">
-        <div class="lbl">THE TEAM · RUNS TOP TO BOTTOM <span class="dim" id="sb-count"></span></div>
+        <div class="lbl"><span id="sb-team-l">THE TEAM · RUNS TOP TO BOTTOM</span> <span class="dim" id="sb-count"></span></div>
         <span class="grow"></span>
         <input id="sb-n" type="number" min="2" max="8" value="4" title="How many bots">
         <button class="hw-btn go" id="sb-ai">DESIGN THE TEAM</button>
@@ -528,7 +527,7 @@
       <div class="row end">
         <button class="hw-btn" id="sb-import">IMPORT</button>
         <button class="hw-btn" id="sb-export" hidden>EXPORT</button>
-        <button class="hw-btn danger" id="sb-del" hidden>DELETE SPACE</button>
+        <button class="hw-btn danger" id="sb-del" hidden>DELETE ROOM</button>
         <span class="grow"></span>
         <button class="hw-btn go big" id="sb-save">SAVE SPACE</button>
       </div>
@@ -544,6 +543,7 @@
 <script src="templates.js"></script>
 <script src="station.js"></script>
 <script src="office.js"></script>
+<script src="rooms.js"></script>
 <script src="storefloor.js"></script>
 <script src="app.js"></script>
 <script src="social.js"></script>

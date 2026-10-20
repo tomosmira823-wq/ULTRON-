@@ -135,6 +135,14 @@
   }
   const save = () => K.persist();
   const get = (id) => S().list.find((x) => x.id === id) || null;
+  const roomOf = (sp) => (sp?.room && window.Rooms ? Rooms.get(sp.room) : null);
+  const capOf = (d) => (d === 'store' || d === 'marketing' ? CAP[d] : roomOf(get(d))?.capacity || CAP.custom);
+  // which room fits a request best (chat)
+  function pickRoom(...txt) {
+    const x = txt.join(' ').toLowerCase();
+    const m = [['podcast', /podcast|episode|guest|interview|show notes/], ['video', /youtube|video|shorts|tiktok|film|script|thumbnail|content/], ['trading', /trad|stock|market|crypto|invest|finance|money|watchlist/], ['sales', /sales|lead|outreach|client|prospect|email|cold/], ['dev', /dev|code|app|website|software|build|program/], ['research', /research|report|study|analy|compare|fact/]];
+    return (m.find(([, re]) => re.test(x)) || ['research'])[0];
+  }
   const kindOf = (d) => (d === 'store' || d === 'marketing' ? d : get(d) ? 'custom' : null);
   const agentsIn = (d) => (d === 'store' || d === 'marketing' ? S().hires[d] : get(d)?.agents || []);
   function findAgent(id) {
@@ -160,7 +168,9 @@
     Office.setExtras(s.hires.marketing.map((h) => ({ id: h.id, name: h.name, icon: h.icon })));
     if (current && floor) {
       const sp = get(current);
-      if (sp) floor.configure({ hue: sp.hue, style: sp.style || 'office', ticker: sp.style === 'trading' ? ticker(sp) : '', agents: sp.agents.map((a) => ({ id: a.id, name: a.name, team: a.team, icon: a.icon })), headers: headers(sp), media: wallMedia(sp) });
+      const agents = sp ? sp.agents.map((a) => ({ id: a.id, name: a.name, team: a.team, icon: a.icon })) : [];
+      if (sp && roomOf(sp)) floor.configure({ room: roomOf(sp), agents, headers: headers(sp), media: wallMedia(sp) });
+      else if (sp) floor.configure({ room: null, hue: sp.hue, style: sp.style || 'office', ticker: sp.style === 'trading' ? ticker(sp) : '', agents, headers: headers(sp), media: wallMedia(sp) });
     }
   }
   function ticker(sp) {
@@ -556,7 +566,7 @@ Give short, specific, useful notes the owner and the rest of the crew can act on
   }
   function viewTeam(body, sp) {
     const bar = el('div', 'mk-bar');
-    bar.append(btn('+ HIRE A BOT', () => openHire(sp.id), 'go'), btn('EDIT SPACE', () => openBuilder(sp.id)), btn('EXPORT SPACE', () => exportSpace(sp)), el('span', 'tiny dim', `${sp.agents.length}/${CAP.custom} desks · bots run top to bottom`));
+    bar.append(btn('+ HIRE A BOT', () => openHire(sp.id), 'go'), btn('EDIT SPACE', () => openBuilder(sp.id)), btn('EXPORT SPACE', () => exportSpace(sp)), el('span', 'tiny dim', `${sp.agents.length}/${capOf(sp.id)} desks · bots run top to bottom`));
     body.append(bar);
     const grid = el('div', 'sp-team');
     sp.agents.forEach((a, i) => {
@@ -673,7 +683,7 @@ Give short, specific, useful notes the owner and the rest of the crew can act on
   function openHire(d, agentId) {
     const kind = kindOf(d); if (!kind) return;
     const list = agentsIn(d), editing = agentId ? list.find((a) => a.id === agentId) : null;
-    if (!editing && list.length >= CAP[kind]) { K.toast(kind === 'custom' ? `This space is full (${CAP.custom} desks). Make another space for more bots.` : `The ${d} floor has ${CAP[kind]} desks for new hires and they’re all taken.`, true); return; }
+    if (!editing && list.length >= capOf(d)) { K.toast(kind === 'custom' ? `Every desk in this room is taken (${capOf(d)}). Add another room for more bots.` : `The ${d} floor has ${CAP[kind]} desks for new hires and they’re all taken.`, true); return; }
     hireCtx = { d, kind, id: agentId || null };
     const a = editing || { name: '', team: kind === 'custom' ? (list[list.length - 1]?.team || 'Team') : 'Hires', job: '', model: DEF_MODEL, icon: 'doc', tools: {}, approve: false, when: 'after', feed: true };
     $('#hire-title').textContent = editing ? `EDIT ${a.name.toUpperCase()}` : `HIRE INTO ${(kind === 'custom' ? get(d).name : d).toUpperCase()}`;
@@ -744,22 +754,52 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
 
   // ---------- space builder ----------
   let bctx = null;
+  function addRoom(rid, name, mission) {
+    const rm = Rooms.get(rid) || Rooms.get('research');
+    let nm = String(name || rm.name).slice(0, 24); while (S().list.some((x) => x.name === nm)) nm = (nm + ' 2').slice(0, 24);
+    const agents = Rooms.crew(rm.id).map((b) => cleanAgent(b, 'custom'));
+    const sp = { id: 's_' + uid(), name: nm, room: rm.id, hue: rm.hue, mission: String(mission || rm.mission), brief: rm.brief, agents, runs: [], auto: { on: false, hours: 24, last: 0 }, createdAt: Date.now(), template: rm.id };
+    S().list.push(sp); save();
+    for (const x of agents) K.agentState[x.id] = { status: K.keys.anthropic ? 'IDLE' : 'OFFLINE' };
+    K.log('ultron', `New room: ${sp.name} with ${agents.length} bots.`, 'ok');
+    return sp;
+  }
+  const previews = new Map();
+  function roomPreview(rm) {
+    if (previews.has(rm.id)) return previews.get(rm.id);
+    const f = OfficeKit.create({ chiefIdle: 'Ready' });
+    f.configure({ room: rm, agents: rm.crew.map((b, i) => ({ id: 'pv' + i, name: b.name, team: b.team, icon: b.icon })), headers: [rm.name, ''] });
+    const url = f.snapshot(480, 280); previews.set(rm.id, url); return url;
+  }
   function openBuilder(id) {
-    const sp = id ? get(id) : null;
-    bctx = { id: sp?.id || null, hue: sp?.hue ?? 188, style: sp?.style || 'office', template: null, agents: sp ? sp.agents.map((a) => ({ ...a, tools: { ...a.tools } })) : [] };
-    $('#sb-title').textContent = sp ? `EDIT ${sp.name.toUpperCase()}` : 'NEW SPACE';
+    const sp = id ? get(id) : null, roomMode = !sp || !!sp.room;
+    bctx = { id: sp?.id || null, hue: sp?.hue ?? 188, style: sp?.style || 'office', room: sp?.room || null, template: null, agents: sp ? sp.agents.map((a) => ({ ...a, tools: { ...a.tools } })) : [] };
+    $('#sb-title').textContent = sp ? `EDIT ${sp.name.toUpperCase()}` : 'ADD A ROOM';
     $('#sb-name').value = sp?.name || ''; $('#sb-mission').value = sp?.mission || ''; $('#sb-brief').value = sp?.brief || '';
     $('#sb-del').hidden = !sp; $('#sb-export').hidden = !sp; $('#sb-tpl-l').hidden = !!sp; $('#sb-tpls').hidden = !!sp; $('#sb-msg').textContent = '';
-    const g = $('#sb-tpls'); g.textContent = '';
-    if (!sp) for (const t of TEMPLATES) {
-      const b = el('button', 'tpl' + (t.id === 'blank' ? ' on' : '')); b.style.setProperty('--sp', `hsl(${t.hue} 100% 70%)`);
-      b.append(el('b', '', t.name), el('span', '', t.tagline), el('i', '', (t.agents.length ? `${t.agents.length} bots` : 'empty') + ' · ' + OfficeKit.STYLES[t.style || 'office'].toLowerCase()));
-      b.onclick = () => { $$('#sb-tpls .tpl').forEach((x) => x.classList.toggle('on', x === b)); pickTemplate(t); };
-      g.append(b);
+    for (const sel of ['#sb-style-f', '#sb-hues-f', '#sb-n', '#sb-ai', '#sb-addbot']) $(sel).hidden = roomMode;
+    $('#sb-team-l').textContent = roomMode ? 'THE CREW · RUNS TOP TO BOTTOM · HIRE MORE FROM THE ROOM' : 'THE TEAM · RUNS TOP TO BOTTOM';
+    $('#sb-save').textContent = sp ? 'SAVE' : 'ADD ROOM';
+    const g = $('#sb-tpls'); g.textContent = ''; g.className = 'room-grid';
+    if (!sp) {
+      for (const rm of Rooms.list()) {
+        const b = el('button', 'room-card'); b.dataset.room = rm.id; b.style.setProperty('--sp', `hsl(${rm.hue} 100% 70%)`);
+        const im = el('img'); im.alt = rm.name; im.src = roomPreview(rm);
+        b.append(im, el('b', '', rm.name), el('span', '', rm.tagline), el('i', '', `${rm.crew.length} bots · ${rm.capacity} desks`));
+        b.onclick = () => { $$('#sb-tpls .room-card').forEach((x) => x.classList.toggle('on', x === b)); chooseRoom(rm); };
+        g.append(b);
+      }
+      g.querySelector('.room-card').click();
     }
     const ss = $('#sb-style'); ss.textContent = ''; for (const [v, n] of Object.entries(OfficeKit.STYLES)) { const o = el('option', '', n); o.value = v; ss.append(o); } ss.value = bctx.style; ss.onchange = () => (bctx.style = ss.value);
     renderHues(); renderBuilderBots();
     $('#sp-builder').hidden = false; setTimeout(() => $('#sb-name').focus(), 50);
+  }
+  function chooseRoom(rm) {
+    bctx.room = rm.id; bctx.hue = rm.hue; bctx.template = rm.id;
+    $('#sb-name').value = rm.name; $('#sb-mission').value = rm.mission; $('#sb-brief').value = rm.brief;
+    bctx.agents = Rooms.crew(rm.id).map((a) => cleanAgent(a, 'custom'));
+    renderBuilderBots();
   }
   function pickTemplate(t) {
     bctx.template = t.id; bctx.hue = t.hue; bctx.style = t.style || 'office'; $('#sb-style').value = bctx.style;
@@ -773,7 +813,8 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
   }
   function renderBuilderBots() {
     const box = $('#sb-bots'); box.textContent = '';
-    $('#sb-count').textContent = `${bctx.agents.length}/${CAP.custom}`;
+    const cap = bctx.room ? Rooms.get(bctx.room).capacity : CAP.custom;
+    $('#sb-count').textContent = `${bctx.agents.length}/${cap}`;
     if (!bctx.agents.length) box.append(el('div', 'tiny dim', 'No bots yet. Pick a template, press Design the team, or add bots after you create the space.'));
     bctx.agents.forEach((a, i) => {
       const r = el('div', 'sb-bot');
@@ -806,10 +847,11 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
     const name = $('#sb-name').value.trim();
     if (!name) { $('#sb-msg').textContent = 'Give the space a name.'; $('#sb-name').focus(); return; }
     if (['STORE', 'MARKETING'].includes(name.toUpperCase())) { $('#sb-msg').textContent = 'That name is taken by a built-in department.'; return; }
-    const agents = bctx.agents.filter((a) => a.name.trim() && a.job.trim()).slice(0, CAP.custom).map((a) => cleanAgent(a, 'custom'));
+    const cap = bctx.room ? Rooms.get(bctx.room).capacity : CAP.custom;
+    const agents = bctx.agents.filter((a) => a.name.trim() && a.job.trim()).slice(0, cap).map((a) => cleanAgent(a, 'custom'));
     let sp = bctx.id && get(bctx.id);
     if (sp) Object.assign(sp, { name: name.slice(0, 24), hue: bctx.hue, style: bctx.style, mission: $('#sb-mission').value.trim(), brief: $('#sb-brief').value.trim(), agents });
-    else { sp = { id: 's_' + uid(), name: name.slice(0, 24), hue: bctx.hue, style: bctx.style, mission: $('#sb-mission').value.trim(), brief: $('#sb-brief').value.trim(), agents, runs: [], auto: { on: false, hours: 24, last: 0 }, createdAt: Date.now(), template: bctx.template }; S().list.push(sp); K.log('ultron', `New space: ${sp.name} with ${agents.length} bots.`, 'ok'); }
+    else { sp = { id: 's_' + uid(), name: name.slice(0, 24), room: bctx.room || undefined, hue: bctx.hue, style: bctx.style, mission: $('#sb-mission').value.trim(), brief: $('#sb-brief').value.trim(), agents, runs: [], auto: { on: false, hours: 24, last: 0 }, createdAt: Date.now(), template: bctx.template }; S().list.push(sp); K.log('ultron', `New space: ${sp.name} with ${agents.length} bots.`, 'ok'); }
     for (const a of agents) K.agentState[a.id] = K.agentState[a.id] || { status: K.keys.anthropic ? 'IDLE' : 'OFFLINE' };
     save(); $('#sp-builder').hidden = true;
     K.setDept(sp.id);
@@ -824,7 +866,7 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
   // ---------- import / export ----------
   const portable = (a) => ({ name: a.name, team: a.team, job: a.job, model: a.model, icon: a.icon, tools: a.tools, approve: a.approve || undefined, when: a.when, feed: a.feed });
   function exportSpace(sp) {
-    const data = { kivo: 'space', v: 1, name: sp.name, hue: sp.hue, style: sp.style, mission: sp.mission, brief: sp.brief, agents: sp.agents.map(portable) };
+    const data = { kivo: 'space', v: 1, name: sp.name, room: sp.room, hue: sp.hue, style: sp.style, mission: sp.mission, brief: sp.brief, agents: sp.agents.map(portable) };
     kivo.saveFile({ name: sp.name.replace(/[^\w -]/g, '') + '.kivo-space.json', data: JSON.stringify(data, null, 2), filters: [{ name: 'Kivo space', extensions: ['json'] }] }).then((f) => f && K.toast('Saved ' + f));
   }
   function exportHires(d) {
@@ -849,7 +891,7 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
     }
     if (j.kivo !== 'space' || !j.name) { K.toast('That file isn’t a Kivo space.', true); return; }
     let name = String(j.name).slice(0, 24); while (S().list.some((s) => s.name === name)) name = (name + ' 2').slice(0, 24);
-    const sp = { id: 's_' + uid(), name, hue: Number(j.hue) || 188, style: OfficeKit.STYLES[j.style] ? j.style : 'office', mission: String(j.mission || ''), brief: String(j.brief || ''), agents: agents.slice(0, CAP.custom).map((a) => cleanAgent(a, 'custom')), runs: [], auto: { on: false, hours: 24, last: 0 }, createdAt: Date.now(), template: 'import' };
+    const sp = { id: 's_' + uid(), name, room: Rooms.get(j.room) ? j.room : undefined, hue: Number(j.hue) || 188, style: OfficeKit.STYLES[j.style] ? j.style : 'office', mission: String(j.mission || ''), brief: String(j.brief || ''), agents: agents.slice(0, Rooms.get(j.room)?.capacity || CAP.custom).map((a) => cleanAgent(a, 'custom')), runs: [], auto: { on: false, hours: 24, last: 0 }, createdAt: Date.now(), template: 'import' };
     S().list.push(sp); save(); $('#sp-builder').hidden = true; K.toast(`Imported ${sp.name} · ${sp.agents.length} bots`); K.setDept(sp.id);
   }
 
@@ -857,7 +899,7 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
   function summary() {
     const s = S();
     const sp = s.list.map((x) => `"${x.name}" (${x.agents.length} bots: ${x.agents.map((a) => a.name).join(', ') || 'none'}; ${isRunning(x.id) ? 'running now' : 'idle'}; purpose: ${(x.mission || '').slice(0, 120)})`).join('; ');
-    return `Custom spaces: ${sp || 'none yet'}. Templates for new spaces: ${TEMPLATES.map((t) => t.id).join(', ')}. Hired bots: store ${s.hires.store.length}/${CAP.store} (${s.hires.store.map((a) => a.name).join(', ') || 'none'}), marketing ${s.hires.marketing.length}/${CAP.marketing} (${s.hires.marketing.map((a) => a.name).join(', ') || 'none'}). The owner is looking at: ${get(K.dept())?.name || K.dept()}.`;
+    return `Custom spaces: ${sp || 'none yet'}. Rooms you can add: ${Rooms.list().map((r) => r.id + ' (' + r.name + ')').join(', ')}. Hired bots: store ${s.hires.store.length}/${CAP.store} (${s.hires.store.map((a) => a.name).join(', ') || 'none'}), marketing ${s.hires.marketing.length}/${CAP.marketing} (${s.hires.marketing.map((a) => a.name).join(', ') || 'none'}). The owner is looking at: ${get(K.dept())?.name || K.dept()}.`;
   }
   function resolveSpace(v) {
     const x = String(v || '').toLowerCase().trim();
@@ -871,8 +913,8 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
     if (a.type === 'hire') {
       const d = resolveSpace(a.space || a.department || a.where) || K.dept(), kind = kindOf(d);
       if (!kind) return note('▶ Couldn’t find that space: ' + (a.space || ''));
-      const list = agentsIn(d), room = CAP[kind] - list.length;
-      if (room <= 0) return note(`▶ ${kind === 'custom' ? get(d).name : d} is full (${CAP[kind]} desks).`);
+      const list = agentsIn(d), room = capOf(d) - list.length;
+      if (room <= 0) return note(`▶ ${kind === 'custom' ? get(d).name : d} is full (${capOf(d)} desks).`);
       let bots = Array.isArray(a.agents || a.bots) ? (a.agents || a.bots) : [];
       const n = Math.max(1, Math.min(room, Number(a.count) || bots.length || 1));
       if (!bots.length || bots.some((b) => !b.job)) {
@@ -888,15 +930,9 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
       return 'hire';
     }
     if (a.type === 'newspace') {
-      const tpl = TEMPLATES.find((t) => t.id === String(a.template || '').toLowerCase());
-      const name = String(a.name || tpl?.name || 'New Space').slice(0, 24);
-      const mission = String(a.mission || a.brief || a.description || tpl?.mission || '');
-      let agents = tpl && tpl.id !== 'blank' ? tpl.agents.map((b) => cleanAgent(b, 'custom')) : [];
-      if (!agents.length && mission) { note(`▶ Designing a team for ${name}…`); agents = (await designBots(mission, Math.max(2, Math.min(8, Number(a.count) || 4)), `a space called "${name}"`, 'custom')).map((b) => cleanAgent(b, 'custom')); }
-      const sp = { id: 's_' + uid(), name, hue: tpl?.hue ?? HUES[S().list.length % HUES.length][1], style: OfficeKit.STYLES[a.style] ? a.style : tpl?.style || 'office', mission, brief: String(a.firstBrief || tpl?.brief || ''), agents, runs: [], auto: { on: false, hours: 24, last: 0 }, createdAt: Date.now(), template: tpl?.id || 'ultron' };
-      S().list.push(sp); save();
-      for (const b of agents) K.agentState[b.id] = { status: K.keys.anthropic ? 'IDLE' : 'OFFLINE' };
-      note(`▶ Built the ${name} space with ${agents.length} bots`);
+      const rid = Rooms.get(String(a.room || a.template || '').toLowerCase())?.id || pickRoom(a.room || '', a.template || '', a.name || '', a.mission || '', a.brief || '');
+      const sp = addRoom(rid, a.name, a.mission || a.brief);
+      note(`▶ Added the ${sp.name} room with ${sp.agents.length} bots`);
       K.setDept(sp.id);
       return 'newspace';
     }
@@ -938,6 +974,6 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
   window.SP = {
     init, get, kindOf, findAgent, nameOf, show, hideCustom, focus, setBusy, renderAll, renderTabs, renderRoster, rosterHires, renderFeed,
     openHire, openBuilder, exportHires, importFile, runSpace, stopSpace, afterRun, crewNotes, summary, chatAction, syncFloors, md,
-    isRunning, get anyRunning() { return runs.size > 0; }, get list() { return S().list; }, TEMPLATES, CAP,
+    isRunning, get anyRunning() { return runs.size > 0; }, get list() { return S().list; }, TEMPLATES, CAP, addRoom, capOf,
   };
 })();
