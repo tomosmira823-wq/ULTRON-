@@ -73,6 +73,7 @@
     const HUB = { u: 11.2, v: 10.8 };
     let room = null;      // a fixed, hand-made layout (rooms.js) instead of the generic slots
     let hovered = null;   // agent under the mouse
+    let nightLevel = 0;   // 0 day … 0.34 night
     const walkers = [];   // bots walking work over to the next desk
     let hubKind = null;   // room centrepiece style
     let canvas, ctx, onSelect = () => {}, t = 0, last = 0;
@@ -163,10 +164,11 @@
       recalcZones();
     }
     const find = (id) => (id === 'ultron' ? CHIEF : AGENTS.find((x) => x.id === id));
-    function packet(from, to, color) {
+    const LINES = ['Here you go!', 'Fresh off my desk', 'All yours', 'Done, have a look', 'Over to you', 'Hot off the press', 'Sorted. Your turn', 'Check this out'];
+    function packet(from, to, color, say) {
       const a = find(from), b = find(to);
       if (!a || !b) return;
-      if (from !== 'ultron' && to !== 'ultron' && from !== to && st[from]) { walk(a, b); return; }
+      if (from !== 'ultron' && to !== 'ultron' && from !== to && st[from]) { walk(a, b, say || CHAT[from + '>' + to] || LINES[Math.floor(Math.random() * LINES.length)]); return; }
       const mid = room && !room.hub ? [(a.u + b.u) / 2 + 0.6, (a.v + b.v) / 2 + 0.6] : [HUB.u, HUB.v];
       packets.push({ pts: [iso(a.u, a.v, 0.2), iso(mid[0], mid[1], 0.2), iso(b.u, b.v, 0.2)], i: 0, p: 0, c: color || T.neon2 });
     }
@@ -236,12 +238,14 @@
       return { placed: i, capacity: EXTRA.reduce((n, z) => n + deskSlots(z).length, 0) };
     }
     // the sender gets up, carries the work to the next desk, drops it and walks back
-    function walk(a, b) {
+    const CHAT = { 'scout>forge': 'Got 3 ideas for you', 'forge>scribe': 'Artwork’s done', 'scribe>auditor': 'Listing ready to check', 'auditor>ledger': 'Passed QA', 'ledger>courier': 'Priced up, ship it', 'mk.trend>mk.rival': 'Here’s what’s trending', 'mk.strategy>mk.schedule': 'Plan’s ready', 'mk.hooks>mk.captions': 'Hooks done', 'mk.art>mk.designer': 'Here’s the look' };
+    function walk(a, b, say) {
       for (let i = walkers.length - 1; i >= 0; i--) if (walkers[i].id === a.id) walkers.splice(i, 1);
       const aisle = (x) => [x.u + 0.2, x.v + 1.15];
       const out = [[a.u, a.v - 0.1], aisle(a), [aisle(b)[0], aisle(a)[1]], aisle(b), [b.u + 0.75, b.v + 0.95]];
-      walkers.push({ id: a.id, to: b.id, pts: out, back: [...out].reverse(), i: 0, p: 0, phase: 'out', drop: 0 });
+      walkers.push({ id: a.id, to: b.id, pts: out, back: [...out].reverse(), i: 0, p: 0, phase: 'out', drop: 0, say: String(say || '') });
       st[a.id].away = true;
+      if (visible) window.EX?.sound('whoosh');
     }
     function stepWalkers(dt) {
       for (let k = walkers.length - 1; k >= 0; k--) {
@@ -265,6 +269,12 @@
       ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(x, y + 1, 7, 2.6, 0, 0, 7); ctx.fill();
       ctx.strokeStyle = '#2a2d33'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(x - 2.5, y - 8); ctx.lineTo(x - 2.5 + step * 2, y); ctx.moveTo(x + 2.5, y - 8); ctx.lineTo(x + 2.5 - step * 2, y); ctx.stroke();
       robot(x, y - 7, 0.72, false, false, 0);
+      if (w.say && w.phase !== 'back') {
+        ctx.font = '600 8.5px Inter, sans-serif'; const tw = ctx.measureText(w.say).width, bx = x - tw / 2 - 6, by = y - 58;
+        ctx.fillStyle = 'rgba(250,250,252,.95)'; ctx.beginPath(); ctx.roundRect(bx, by, tw + 12, 15, 7); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(x - 3, by + 15); ctx.lineTo(x + 2, by + 15); ctx.lineTo(x - 1, by + 20); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#17181c'; ctx.textBaseline = 'middle'; ctx.textAlign = 'center'; ctx.fillText(w.say, x, by + 7.8); ctx.textAlign = 'left';
+      }
       if (w.phase === 'out' || w.phase === 'drop') {
         const fy = y - 30 - (w.phase === 'drop' ? w.drop * 16 : 0); ctx.globalAlpha = w.phase === 'drop' ? Math.max(0, 1 - w.drop / 0.6) : 1;
         ctx.fillStyle = '#f4f2ea'; ctx.fillRect(x + 6, fy, 8, 10); ctx.fillStyle = T.neon; ctx.fillRect(x + 7.5, fy + 2.5, 5, 1); ctx.fillRect(x + 7.5, fy + 5, 4, 1);
@@ -586,6 +596,7 @@
       else if (style === 'lab') { const [mx, my] = iso(a.u + 0.4, a.v + 0.4, 0.56); ctx.strokeStyle = T.a2(0.8); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(mx - 2, my - 9); ctx.lineTo(mx - 2, my - 5); ctx.lineTo(mx - 5, my); ctx.lineTo(mx + 5, my); ctx.lineTo(mx + 2, my - 5); ctx.lineTo(mx + 2, my - 9); ctx.stroke(); ctx.fillStyle = busy ? OK : T.a(0.6); ctx.fillRect(mx - 4, my - 3, 8, 3); if (busy) { ctx.fillStyle = OK; ctx.beginPath(); ctx.arc(mx, my - 11 - ((t * 8) % 6), 1.2, 0, 7); ctx.fill(); } }
       else if (style === 'workshop') { const [mx, my] = iso(a.u + 0.35, a.v + 0.45, 0.56); ctx.fillStyle = busy ? '#ffc247' : '#776'; ctx.fillRect(mx - 5, my - 5, 10, 4); ctx.fillStyle = '#f2efe8'; ctx.fillRect(mx - 3, my - 9, 6, 4); }
       }
+      if (nightLevel > 0.05 && room) { const [gx, gy] = iso(a.u, a.v + 0.45, 0.6); const g = ctx.createRadialGradient(gx, gy, 1, gx, gy, 34); g.addColorStop(0, T.a2(0.22 * nightLevel / 0.34 + (busy ? 0.1 : 0))); g.addColorStop(1, T.a2(0)); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(gx, gy, 34, 18, 0, 0, 7); ctx.fill(); }
       if (!s.away) robot(rx, ry, 0.85, busy, s.err, s.bob);
       if (room) deskGear(a.kind, a.u, a.v, busy);
       if (room && a.kind === 'headset') { ctx.strokeStyle = '#222'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(rx, ry - 24, 9, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke(); ctx.fillStyle = busy ? OK : '#333'; ctx.beginPath(); ctx.arc(rx - 8.5, ry - 22, 2.2, 0, 7); ctx.fill(); }
@@ -673,7 +684,7 @@
         x.lineWidth = 3;
         if (kind === 'chart') { x.strokeStyle = c1; x.beginPath(); for (let i = 0; i <= 12; i++) { const yy = 40 - i * 1.6 - Math.sin(i * 1.3 + k) * 8; i ? x.lineTo(8 + i * 7, yy) : x.moveTo(8, yy); } x.stroke(); }
         else if (kind === 'candles') { for (let i = 0; i < 9; i++) { const up = Math.sin(i * 2.1 + Math.floor(k)) > 0, h = 8 + Math.abs(Math.sin(i * 1.7 + k * 0.3)) * 22, y = 14 + Math.abs(Math.cos(i + k * 0.2)) * 18; x.fillStyle = up ? OK : BAD; x.fillRect(8 + i * 10, y, 6, h); } }
-        else if (kind === 'ticker') { x.font = '700 11px monospace'; for (let i = 0; i < 4; i++) { x.fillStyle = (i + Math.floor(k)) % 3 ? OK : BAD; x.fillText(['FTSE ▲0.4', 'NVDA ▲1.2', 'GBP ▼0.1', 'BTC ▲2.3', 'AAPL ▼0.6'][(i + Math.floor(k / 2)) % 5], 6, 14 + i * 13); } }
+        else if (kind === 'ticker') { x.font = '700 11px monospace'; for (let i = 0; i < 4; i++) { x.fillStyle = (i + Math.floor(k)) % 3 ? OK : BAD; x.fillText(['FTSE', 'NVDA', 'GBP', 'BTC', 'AAPL'][(i + Math.floor(k / 2)) % 5], 6, 14 + i * 13); } }
         else if (kind === 'code') { const cs = ['#7ee8ff', '#ff8a5a', '#c38bff', '#b6ff5a', '#ffd36b']; for (let i = 0; i < 6; i++) { x.fillStyle = cs[(i + Math.floor(k)) % 5]; x.fillRect(8 + (i % 3) * 8, 7 + i * 8, 20 + ((i * 37 + Math.floor(k * 3)) % 50), 4); } }
         else if (kind === 'timeline') { const cs = ['#ff5a4f', '#5ac8ff', '#ffc247', '#46ff9a']; for (let r = 0; r < 3; r++) for (let i = 0; i < 4; i++) { x.fillStyle = cs[(r + i) % 4]; x.fillRect(6 + i * 23 + r * 5, 10 + r * 14, 18, 9); } x.fillStyle = '#fff'; x.fillRect(6 + ((k * 12) % 88), 4, 2, 52); }
         else if (kind === 'wave') { x.strokeStyle = c1; x.beginPath(); for (let i = 0; i <= 40; i++) { const xx = 6 + i * 2.2, a = Math.sin(i * 0.9 + k * 3) * Math.sin(i * 0.25 + k) * (on ? 20 : 6); x.moveTo(xx, 30 - a); x.lineTo(xx, 30 + a); } x.stroke(); }
@@ -748,6 +759,11 @@
     function drawScene(dt) {
       drawWalls(); drawFloor();
       if (room?.floorProps) room.floorProps(API);
+      if (window.KIVO_LIGHT !== false) {
+        const h = new Date().getHours() + new Date().getMinutes() / 60;
+        const night = h >= 21 || h < 6 ? 0.34 : h >= 19 ? (h - 19) / 2 * 0.34 : h < 8 ? (8 - h) / 2 * 0.34 : 0;
+        if (night > 0.01) { ctx.save(); ctx.globalAlpha = night; ctx.fillStyle = '#02030a'; ctx.beginPath(); const P0 = [iso(0, 0, WALL_H), iso(N, 0, WALL_H), iso(N, 0), iso(N, N), iso(0, N), iso(0, N, WALL_H)]; P0.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.fill(); ctx.restore(); nightLevel = night; } else nightLevel = 0;
+      }
       drawZones();
       if (!room || room.hub) { if (!room) drawLinks(); drawHub(); }
       stepWalkers(dt || 0);

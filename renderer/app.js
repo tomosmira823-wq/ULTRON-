@@ -91,7 +91,7 @@
   function btn(label, fn, cls) { const b = el('button', 'hw-btn ' + (cls || ''), label); b.onclick = fn; return b; }
   const stamp = (ts) => new Date(ts).toTimeString().slice(0, 8);
   const tpl = () => TEMPLATES.find((t) => t.id === D.settings.template) || TEMPLATES[0];
-  const notify = (t, b) => kivo.notify(t, b);
+  const notify = (t, b) => { kivo.notify(t, b); window.EX?.onNotify(t, b); };
   function rollDay() {
     if (D.day.date !== today()) { D.history[D.day.date] = { tokens: D.day.tokens, designs: D.day.designs, usd: D.day.usd || 0 }; D.day = { date: today(), tokens: 0, designs: 0, usd: 0 }; if (D.cost) D.cost.today = {}; }
   }
@@ -781,10 +781,12 @@ Products by status: ${JSON.stringify(by)}. Designs today: ${D.day.designs}. Orde
 ${salesInsight()}
 Recent designs: ${D.products.slice(-10).map((p) => `${p.trend?.phrase} [${p.status}${p.qa ? ', QA ' + p.qa.score : ''}]`).join('; ')}`;
   }
-  async function chatSend() {
-    const box = $('#chat-input'); const msg = box.value.trim(); if (!msg) return;
-    if (!keys.anthropic) { toast('Add your Anthropic API key first.', true); return; }
-    box.value = ''; D.chat.push({ role: 'user', text: msg, ts: Date.now() }); renderChat();
+  async function chatSend(override, via) {
+    const box = $('#chat-input'); const msg = String(override ?? box.value).trim(); if (!msg) return;
+    if (!keys.anthropic) { toast('Add your Anthropic API key first.', true); return 'My Claude key isn’t set up yet.'; }
+    if (override == null) box.value = '';
+    D.chat.push({ role: 'user', text: msg, ts: Date.now(), via }); renderChat();
+    let answer = '';
     setAgent('ultron', 'WORKING', 'Thinking');
     $('#chat-send').disabled = true;
     try {
@@ -805,11 +807,13 @@ Available actions (use only when the owner asks for them or clearly wants them):
 - {"type":"model","agent":"ultron"|"scout"|"forge"|"scribe"|"auditor"|"all","model":"opus"|"sonnet"|"haiku"} switch the Claude model an agent uses (Opus = best quality but roughly 2x Sonnet's cost; Haiku is about 20x cheaper than Sonnet; Haiku = fastest and cheapest, fine for checks)
 - {"type":"show","status":"review"|"published"|"ready"|"failed"|"all"} show those products in the terminal
 - {"type":"hire","space":"store"|"marketing"|"<custom space name>"|"current","count":1-6,"brief":"what the new bots should do"} hire new bots into a space (the app designs them from the brief; or give "agents":[{"name","job","team"}])
-- {"type":"newspace","room":"podcast"|"video"|"trading"|"sales"|"research"|"dev","name":"optional name"} add a ready-made room (department) with its own layout and crew: podcast = Podcast Studio, video = Video Studio (YouTube), trading = Trading Floor (research + paper trades only), sales = Sales Office, research = Research Lab, dev = Dev Studio. Only these rooms exist.
+- {"type":"newspace","room":"podcast"|"video"|"trading"|"sales"|"research"|"dev"|"support"|"finance"|"music","name":"optional name"} add a ready-made room (department) with its own layout and crew: podcast = Podcast Studio, video = Video Studio (YouTube), trading = Trading Floor (research + paper trades only), sales = Sales Office, research = Research Lab, dev = Dev Studio, support = Call Centre (customer service), finance = Finance Office, music = Music Studio. Only these rooms exist.
 - {"type":"runspace","space":"<custom space name>","brief":"..."} give a custom space a job and start it
 IMPORTANT: actions only happen if you put them in "actions". Never say you started, queued or changed something unless the matching action is in your list — the app confirms each action to the owner itself. If the owner asks for designs, always include a mission action.
 Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}`, { maxTokens: 1500, agent: 'ultron', task: 'Answering you' });
-      D.chat.push({ role: 'ultron', text: String(r.reply || 'Done.'), ts: Date.now() });
+      answer = String(r.reply || 'Done.');
+      D.chat.push({ role: 'ultron', text: answer, ts: Date.now() });
+      if (via === 'voice' || window.EX?.speakAll) window.EX?.speak(answer);
       renderChat();
       const acts = Array.isArray(r.actions) ? r.actions : r.actions ? [r.actions] : r.action ? [r.action] : [];
       let started = false;
@@ -822,10 +826,11 @@ Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}
       const wantMk = /\b(posts?|reels?|tiktoks?|pins?|campaign|marketing|social)\b/i.test(msg) && msg.match(/\b(\d{1,2})\b/);
       if (!started && wantMk && /\b(make|create|do|run|generate|give me|start)\b/i.test(msg)) await doAction({ type: 'campaign', count: Number(wantMk[1]), brief: msg });
       else if (!started && want) await doAction({ type: 'mission', count: Number(want[2]), brief: msg });
-    } catch (e) { D.chat.push({ role: 'ultron', text: 'Comms error: ' + e.message, ts: Date.now(), err: true }); renderChat(); }
+    } catch (e) { answer = 'Comms error: ' + e.message; D.chat.push({ role: 'ultron', text: answer, ts: Date.now(), err: true }); renderChat(); }
     $('#chat-send').disabled = false;
     setAgent('ultron', running ? 'WORKING' : 'IDLE');
     persist();
+    return answer;
   }
   const missionQueue = [];
   function normAction(a) {
@@ -878,6 +883,7 @@ Reply with JSON only: {"reply": "what you say to the owner", "actions": [ ... ]}
     }
     else if (a.type === 'campaign') {
       if (!window.MK) return;
+      if (window.EX && !EX.pro) { EX.allow('marketing'); return note('▶ Marketing needs Kivo Ultron Pro.'); }
       if (MK.running) return note('A marketing run is already going.');
       const n = Math.max(1, Math.min(20, Number(a.count) || MK.M().settings.perRun));
       note(`▶ Marketing run started: ${n} posts`); setDept('marketing');
@@ -1669,7 +1675,7 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     });
     $('#log-clear').onclick = () => { D.log = []; renderLog(); persist(); };
     $$('.ctab').forEach((b) => (b.onclick = () => showCtab(b.dataset.ctab)));
-    $('#chat-send').onclick = chatSend;
+    $('#chat-send').onclick = () => chatSend();
     $('#chat-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSend(); } });
 
     $$('.tab').forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
@@ -1826,6 +1832,8 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     renderControls();
   }
   function setDept(d) {
+    const sp0 = window.SP?.get(d) || null;
+    if (window.EX && ((d === 'marketing' && !EX.allow('marketing')) || (sp0 && !EX.allow('room', d)))) { if (dept() === d) d = 'store'; else return; }
     const sp = window.SP?.get(d) || null;
     if (!sp && !['store', 'marketing'].includes(d)) d = 'store';
     D.ui.dept = d; persist();
@@ -1878,7 +1886,7 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     Core.init($('#core'));
     wire();
     for (const a of AGENTS) agentState[a.id] = { status: keys.anthropic ? 'IDLE' : 'OFFLINE' };
-    await SOCIAL.load(); MK.init(); SP.init();
+    await SOCIAL.load(); MK.init(); SP.init(); await EX.init();
     document.querySelectorAll('.dept[data-dept="store"], .dept[data-dept="marketing"]').forEach((b) => (b.onclick = () => setDept(b.dataset.dept)));
     renderRoster(); renderLog(); renderChat(); renderAll();
     setDept(D.ui.dept || 'store');
@@ -1891,7 +1899,9 @@ ${ctx || 'none found'}`, { maxTokens: 900, agent: 'scribe', task: 'Drafting a cu
     get D() { return D; }, get keys() { return keys; }, get feedAgent() { return feedAgent; },
     ask, askJSON, log, persist, toast, notify, setAgent, agentState, live, money, usd, svgURL, svgToPNG, shopContext, calendarText,
     tpl, modelFor, setAgentModel, MODEL_CHOICES, modelName, costOf, stamp, fatal, cleanErr, feedTouch, selectAgent, renderReadouts, setDept, renderRoster,
-    storeSummary: () => stateSummary(), checkTerm, renderRecent, dept: () => dept(), busyElsewhere: () => running || !!window.MK?.running,
+    storeSummary: () => stateSummary(), checkTerm, renderRecent,
+    startMission: (brief) => { if (running) { missionQueue.push({ brief, n: D.settings.acount, opts: {} }); return; } runMission(brief, D.settings.acount); },
+    setStoreBrief: (brief) => { $('#brief').value = brief; saveUI(); renderNeeds(); }, chatSend: (t, via) => chatSend(t, via), get running() { return running; }, dept: () => dept(), busyElsewhere: () => running || !!window.MK?.running,
     cancelAgents: (ids) => { const set = new Set(ids); const r = Object.entries(reqAgent).filter(([, a]) => set.has(a)).map(([k]) => Number(k)); if (r.length) kivo.cancelReq?.(r); },
   };
   boot();

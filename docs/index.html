@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kivo Ultron · AI rooms that run your business</title>
+<meta name="description" content="A Windows app where teams of Claude-powered bots run your Etsy shop, your marketing and any room you add: podcast, video, sales, research, finance and more.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Michroma&family=VT323&display=swap" rel="stylesheet">
+<style>
+  /* ---- settings you can change ---- */
+  :root { --acc: #46ff9a; --acc2: #b48cff; --bg: #07090a; --panel: #111416; --ink: #dfe6e2; --dim: #7f8a85; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: radial-gradient(120% 60% at 50% 0%, #0f1a14 0%, var(--bg) 60%); color: var(--ink); font: 16px/1.6 Inter, system-ui, sans-serif; }
+  a { color: var(--acc); }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 20px; }
+  nav { display: flex; align-items: center; gap: 16px; padding: 18px 0; }
+  .logo { font: 400 18px/1 Michroma, sans-serif; letter-spacing: .3em; color: #eef; text-decoration: none; }
+  .logo b { color: var(--acc); }
+  nav .sp { flex: 1; }
+  nav a.l { color: var(--dim); text-decoration: none; font: 400 10px/1 Michroma, sans-serif; letter-spacing: .14em; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 20px; border-radius: 6px; font: 400 11px/1 Michroma, sans-serif; letter-spacing: .14em; text-decoration: none; border: 1px solid #000; cursor: pointer; }
+  .btn.go { background: linear-gradient(180deg, #6dffb0, #2fd47e); color: #04140b; box-shadow: 0 0 22px rgba(70,255,154,.3), inset 0 1px 0 rgba(255,255,255,.5); }
+  .btn.ghost { background: #15191b; color: var(--ink); border-color: #2a3134; }
+  .btn[aria-disabled=true] { opacity: .55; cursor: default; }
+  header.hero { padding: 64px 0 30px; text-align: center; }
+  h1 { font: 400 clamp(28px, 4.6vw, 52px)/1.15 Michroma, sans-serif; letter-spacing: .04em; margin: 0 0 18px; color: #f2f6f4; }
+  h1 em { font-style: normal; color: var(--acc); text-shadow: 0 0 18px rgba(70,255,154,.35); }
+  .lead { max-width: 720px; margin: 0 auto 28px; color: #b8c4bf; font-size: 18px; }
+  .ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .shot { margin: 42px auto 0; border-radius: 10px; overflow: hidden; border: 1px solid #222a2d; box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(70,255,154,.08); }
+  .shot img { display: block; width: 100%; height: auto; }
+  section { padding: 70px 0 10px; }
+  h2 { font: 400 clamp(18px, 2.4vw, 26px)/1.3 Michroma, sans-serif; letter-spacing: .06em; margin: 0 0 10px; }
+  .sub { color: var(--dim); margin: 0 0 26px; max-width: 760px; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid #222a2d; border-radius: 8px; overflow: hidden; }
+  .card img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block; border-bottom: 1px solid #222a2d; }
+  .card .t { padding: 12px 14px 14px; }
+  .card b { font: 400 11px/1.3 Michroma, sans-serif; letter-spacing: .1em; display: block; margin-bottom: 4px; }
+  .card span { color: var(--dim); font-size: 14px; }
+  .feat { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 30px; }
+  .feat div { padding-left: 18px; border-left: 2px solid rgba(70,255,154,.4); }
+  .feat b { display: block; color: #eef; }
+  .feat span { color: var(--dim); font-size: 15px; }
+  .price { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .plan { background: var(--panel); border: 1px solid #222a2d; border-radius: 10px; padding: 26px; display: flex; flex-direction: column; gap: 12px; }
+  .plan.pro { border-color: rgba(70,255,154,.5); box-shadow: 0 0 40px rgba(70,255,154,.08); }
+  .plan h3 { margin: 0; font: 400 14px/1 Michroma, sans-serif; letter-spacing: .14em; }
+  .plan .amt { font: 400 44px/1 VT323, monospace; color: var(--acc); }
+  .plan ul { margin: 0; padding-left: 18px; color: #c3cdc8; }
+  .plan .btn { align-self: flex-start; margin-top: auto; }
+  .note { color: var(--dim); font-size: 14px; }
+  footer { padding: 60px 0 40px; color: var(--dim); font-size: 13px; border-top: 1px solid #1a1f21; margin-top: 70px; }
+  @media (max-width: 860px) { .grid, .feat, .price { grid-template-columns: minmax(0, 1fr); } nav a.l { display: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav><a class="logo" href="#"><b>✱</b> KIVO ULTRON</a><span class="sp"></span><a class="l" href="#rooms">ROOMS</a><a class="l" href="#how">HOW IT WORKS</a><a class="l" href="#buy">PRICING</a><a class="btn ghost" id="dl-top" href="https://github.com/tomosmira823-wq/ULTRON-/releases/latest">DOWNLOAD</a></nav>
+
+  <header class="hero">
+    <h1>Rooms full of <em>AI bots</em><br>that run your business</h1>
+    <p class="lead">Kivo Ultron is a Windows app where teams of Claude-powered bots work in rooms you can watch. They design and sell your Etsy shirts, post your marketing, find leads, prep your podcast and research anything, and they hand work to each other while you’re busy.</p>
+    <div class="ctas"><a class="btn go" href="https://github.com/tomosmira823-wq/ULTRON-/releases/latest">DOWNLOAD FREE FOR WINDOWS</a><a class="btn ghost" href="#buy">SEE PRO</a></div>
+    <div class="shot"><img src="img/podcast.jpg" alt="The Podcast Studio room: bots around a round table with mics, cameras and a control room" width="1400" height="875"></div>
+  </header>
+
+  <section id="rooms">
+    <h2>Pick a room. The crew is already at their desks.</h2>
+    <p class="sub">Every room is a hand-built office with its own furniture and a ready-made crew. Click any bot to watch it work live, and hire more into the spare desks.</p>
+    <div class="grid">
+      <div class="card"><img src="img/store.jpg" alt="Print Shop" loading="lazy"><div class="t"><b>STORE · PRINT SHOP</b><span>Finds trends, draws print-ready designs, writes Etsy listings, checks trademarks and publishes through Printify.</span></div></div>
+      <div class="card"><img src="img/trading.jpg" alt="Trading Floor" loading="lazy"><div class="t"><b>TRADING FLOOR</b><span>Market research, news and a paper-trade journal. Research only, never real trades, not financial advice.</span></div></div>
+      <div class="card"><img src="img/sales.jpg" alt="Sales Office" loading="lazy"><div class="t"><b>SALES OFFICE</b><span>Finds local businesses, audits their sites and writes personal outreach. You approve every email before it goes.</span></div></div>
+      <div class="card"><img src="img/video.jpg" alt="Video Studio" loading="lazy"><div class="t"><b>VIDEO STUDIO</b><span>Ideas, scripts, titles, thumbnails and shot lists for YouTube and Shorts.</span></div></div>
+      <div class="card"><img src="img/music.jpg" alt="Music Studio" loading="lazy"><div class="t"><b>MUSIC STUDIO</b><span>Finds artists and playlists to pitch, plans releases and writes the pitches.</span></div></div>
+      <div class="card"><img src="img/finance.jpg" alt="Finance Office" loading="lazy"><div class="t"><b>FINANCE OFFICE</b><span>Profit after every fee, where money leaks, and a tax-pot estimate (not tax advice).</span></div></div>
+    </div>
+    <p class="note" style="margin-top:14px">Also: Podcast Studio, Research Lab, Dev Studio, Call Centre and a Marketing floor that posts to Instagram, TikTok and Pinterest.</p>
+  </section>
+
+  <section id="how">
+    <h2>How it works</h2>
+    <p class="sub">You bring a Claude API key from Anthropic (pay as you go, usually pennies per job). Everything runs on your PC and your keys stay encrypted there.</p>
+    <div class="feat">
+      <div><b>Give a brief, press Run</b><span>ULTRON plans the job and each bot builds on the last. Or just tell ULTRON in plain English.</span></div>
+      <div><b>Rooms hand work to each other</b><span>Research feeds Sales, a podcast plan goes to the Video Studio, findings become Store designs.</span></div>
+      <div><b>Approve from your phone</b><span>Link Telegram and tap Approve, Redo or Send from anywhere. Message ULTRON on the go.</span></div>
+      <div><b>Bots that actually do things</b><span>Send emails (you approve each one), post summaries to Slack or Discord, save results to your Drive folder.</span></div>
+      <div><b>Talk to ULTRON</b><span>Hit the mic and speak; ULTRON can read his replies out loud.</span></div>
+      <div><b>You stay in control</b><span>Per-room daily budgets, a cost readout on every bot, and you choose which Claude model each one uses.</span></div>
+    </div>
+  </section>
+
+  <section id="buy">
+    <h2>Pricing</h2>
+    <p class="sub">Start free. Upgrade when you want the whole building.</p>
+    <div class="price">
+      <div class="plan"><h3>FREE</h3><div class="amt">£0</div><ul><li>The Store (Etsy print shop)</li><li>One extra room of your choice</li><li>Phone approvals, voice, backups</li></ul><a class="btn ghost" href="https://github.com/tomosmira823-wq/ULTRON-/releases/latest">DOWNLOAD</a></div>
+      <div class="plan pro"><h3>PRO</h3><div class="amt" id="price">£49</div><ul><li>Everything in Free</li><li>Marketing floor with auto-posting</li><li>Every room, as many as you like</li><li>All future updates</li></ul><a class="btn go" id="buy-btn" href="#">BUY PRO</a><span class="note" id="buy-note">One payment. Your licence key arrives by email.</span></div>
+    </div>
+    <p class="note">You also pay Anthropic directly for the Claude API (and Printify for any shirts you sell). Windows 10 or 11.</p>
+  </section>
+
+  <footer>© Kivo · Kivo Ultron is an independent product and isn’t affiliated with Anthropic, Etsy, Printify, Instagram, TikTok or Pinterest.</footer>
+</div>
+<script>
+  // Paste your Stripe Payment Link here (Stripe dashboard → Payment links). Until then the button says buying opens soon.
+  const STRIPE_LINK = '';
+  const b = document.getElementById('buy-btn');
+  if (STRIPE_LINK) b.href = STRIPE_LINK;
+  else { b.textContent = 'BUYING OPENS SOON'; b.setAttribute('aria-disabled', 'true'); b.removeAttribute('href'); document.getElementById('buy-note').textContent = 'Pro keys go on sale shortly.'; }
+</script>
+</body>
+</html>

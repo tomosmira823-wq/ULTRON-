@@ -93,6 +93,7 @@ app.whenReady().then(() => {
   applyLogin();
   createWindow();
   buildTray();
+  extras.startTg();
   if (app.isPackaged) {
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
@@ -131,7 +132,8 @@ ipcMain.on('notify', (_e, { title, body }) => {
 // ---------- storage ipc ----------
 ipcMain.handle('data:load', () => readJSON(DATA(), {}));
 ipcMain.handle('data:save', (_e, d) => { writeJSON(DATA(), d); return true; });
-ipcMain.handle('keys:status', () => { const k = readKeys(); return { anthropic: !!k.anthropic, printify: !!k.printify }; });
+ipcMain.handle('keys:status', () => { const k = readKeys(); return { anthropic: !!k.anthropic, printify: !!k.printify, openai: !!k.openai }; });
+const extras = require('./main-extra')({ app, ipcMain, dialog, getWin: () => win, readKeys, writeKeys, DATA });
 ipcMain.handle('keys:set', (_e, patch) => { const k = readKeys(); for (const [a, b] of Object.entries(patch)) { if (b === null) delete k[a]; else if (b) k[a] = b.trim(); } writeKeys(k); return true; });
 
 // ---------- network with retry ----------

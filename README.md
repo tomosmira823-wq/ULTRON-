@@ -2,6 +2,18 @@
 
 A suite of AI departments ("spaces"). **STORE** designs and sells Etsy print-on-demand shirts; **MARKETING** promotes them on Instagram, TikTok and Pinterest; and you can **build your own spaces** with their own teams of bots. ULTRON runs them all.
 
+## New in 2.5
+- **Rooms hand work to each other:** in EDIT ROOM, pick who gets the result (another room, or the Store as a design brief) and whether they start straight away.
+- **Bots that do things:** bots with the *Send emails* tool put their emails in an outbox; nothing goes until you press Send (in the app or on your phone). Rooms can post a summary to Slack/Discord and save each result to a folder (e.g. Google Drive or OneDrive).
+- **Phone approvals (Telegram):** link a bot from @BotFather in Settings. You get Approve / Redo / Stop buttons, email Send buttons, finish updates, and you can message ULTRON from anywhere.
+- **Voice:** 🎙 in Chat (speech-to-text via an optional OpenAI key) and ULTRON can read replies out loud.
+- **Per-room daily budget.**
+- **Sound, chatter and lighting:** synth sound effects (gong in Sales, bell on the Trading Floor), keyboard ticks while bots work, speech bubbles on hand-offs, and day/night lighting.
+- **3 more rooms:** Call Centre, Finance Office, Music Studio.
+- **Free + Pro:** free = Store + one room; a Pro key (checked offline) unlocks Marketing and every room. Make keys with `node tools/make-key.js <private.pem> "Customer"` (the private key is never in this repo).
+- **Backup & sync:** backup now / restore, and daily auto-backups to any folder.
+- **Landing page:** `docs/index.html` (served by GitHub Pages). Paste your Stripe Payment Link into `STRIPE_LINK` at the bottom of the page.
+
 ## Rooms (2.3)
 - **+ ROOM** in the title bar opens the room picker. Each room is a hand-made layout with its own furniture and a ready crew:
   - **Podcast Studio:** round table with mics, cameras, softbox lights, a glass control room and a green room. Crew: Showrunner, Guest Researcher, Question Writer, Show Notes, Clip Picker, Promo Writer.

@@ -160,9 +160,9 @@
     walls(A) {
       A.wallQuad('right', 0.6, 23.4, 1.0, 5.0, '#020403', 'hsl(140 100% 50% / .45)', 1.2);
       A.wallPaint('right', 0.6, 12, 1.0, 5.0, (x) => { x.lineWidth = 1.2; for (let i = 0; i < 26; i++) { const up = Math.sin(i * 2.1 + Math.floor(A.t / 2)) > -0.2, h = 6 + Math.abs(Math.sin(i * 1.3 + A.t * 0.2)) * 22, y = 12 + Math.abs(Math.cos(i * 0.7 + A.t * 0.1)) * 22; x.fillStyle = up ? '#46ff9a' : '#ff5a4f'; x.fillRect(4 + i * 3.7, y, 2.4, h); } });
-      A.wallPaint('right', 12, 23.4, 1.0, 5.0, (x) => { x.strokeStyle = '#46ff9a'; x.lineWidth = 1.4; x.beginPath(); for (let i = 0; i <= 40; i++) { const yy = 44 - i * 0.6 - Math.sin(i * 0.6 + A.t) * 6 - Math.sin(i * 0.17) * 8; i ? x.lineTo(4 + i * 2.3, yy) : x.moveTo(4, yy); } x.stroke(); x.fillStyle = '#ffc247'; x.font = '700 7px monospace'; x.fillText('FTSE 100  8,412.6  ▲0.42%', 6, 10); });
+      A.wallPaint('right', 12, 23.4, 1.0, 5.0, (x) => { x.strokeStyle = '#46ff9a'; x.lineWidth = 1.4; x.beginPath(); for (let i = 0; i <= 40; i++) { const yy = 44 - i * 0.6 - Math.sin(i * 0.6 + A.t) * 6 - Math.sin(i * 0.17) * 8; i ? x.lineTo(4 + i * 2.3, yy) : x.moveTo(4, yy); } x.stroke(); x.fillStyle = '#ffc247'; x.font = '700 7px Michroma, sans-serif'; x.fillText('MARKETS', 6, 10); });
       A.wallQuad('right', 0.6, 23.4, 5.15, 5.95, '#010201', 'hsl(140 100% 50% / .5)');
-      const txt = 'FTSE ▲0.4   NVDA ▲1.2   AAPL ▼0.6   MSFT ▲0.3   GBP/USD ▼0.1   BTC ▲2.3   GOLD ▲0.5   ';
+      const txt = 'FTSE 100   ·   NVDA   ·   AAPL   ·   MSFT   ·   GBP/USD   ·   BTC   ·   GOLD   ·   ';
       const off = (A.t * 1.6) % 22;
       A.wallClip('right', 0.6, 23.4, 5.15, 5.95, () => { for (let k = -1; k < 2; k++) A.wallText(txt, 'right', 0.8 + k * 22 - off, 5.55, '#46ff9a', 9); });
       const cities = [['LDN', 0], ['NYC', -5], ['TYO', 9], ['HKG', 8]];
@@ -195,7 +195,7 @@
       bot('Site Auditor', 'Calls', 'check', 'For each lead, look at their website and online presence and list 3 specific, honest problems (speed, mobile, booking, out of date, no site) and the opportunity for each.', { web: true }),
       bot('Offer Writer', 'Calls', 'money', 'Turn each audit into a short, specific offer: what we would build, the benefit to them in plain English and a starting price range.'),
       bot('Email Writer', 'Calls', 'mail', 'Write a short personal cold email for each lead (subject + under 120 words). Mention one real detail about their business. Friendly, no hype, one clear call to action.'),
-      bot('Checker', 'Quality', 'check', 'Check every email for made-up facts, spelling, tone and spammy wording. Output the final, ready-to-send list as a table: business, email address if known, subject, email.', {}, { approve: true }),
+      bot('Checker', 'Quality', 'check', 'Check every email for made-up facts, spelling, tone and spammy wording. Output the final, ready-to-send list as a table: business, email address if known, subject, email.', { email: true }, { approve: true }),
     ],
     cards: { left: [0, 1, 2, 7, 8], right: [0, 1, 2, 3, 4] },
     floorProps(A) { A.rug(15.8, 22.8, 18.4, 22.8, 'hsl(195 25% 15%)', 'hsl(195 35% 24%)'); },
@@ -225,10 +225,9 @@
       });
       A.wallQuad('right', 13.3, 22.8, 1.3, 4.95, '#03080a', 'hsl(188 100% 60% / .5)', 1.2);
       A.wallPaint('right', 13.3, 22.8, 1.3, 4.95, (x) => {
-        x.fillStyle = '#7ee8ff'; x.font = '700 7px Michroma, sans-serif'; x.fillText('THIS WEEK', 6, 10);
-        x.font = '700 16px monospace'; x.fillStyle = '#fff'; x.fillText('12', 6, 32); x.fillText('3', 40, 32); x.fillText('£4.2k', 64, 32);
-        x.font = '600 5px Inter'; x.fillStyle = '#7ee8ff'; x.fillText('EMAILS SENT', 6, 39); x.fillText('REPLIES', 40, 39); x.fillText('PIPELINE', 66, 39);
-        x.fillStyle = '#123'; x.fillRect(6, 46, 88, 5); x.fillStyle = '#46ff9a'; x.fillRect(6, 46, 88 * (0.35 + 0.05 * Math.sin(A.t)), 5);
+        x.fillStyle = '#7ee8ff'; x.font = '700 7px Michroma, sans-serif'; x.fillText('TARGET BOARD', 6, 10);
+        const busy = A.anyBusy(); x.font = '700 12px Michroma, sans-serif'; x.fillStyle = busy ? '#46ff9a' : '#2b5560'; x.fillText(busy ? 'DIALLING' : 'READY', 6, 32);
+        x.fillStyle = '#123'; x.fillRect(6, 44, 88, 5); x.fillStyle = '#46ff9a'; x.fillRect(6, 44, busy ? 88 * ((A.t * 0.2) % 1) : 0, 5);
       });
     },
   };
@@ -390,7 +389,161 @@
     },
   };
 
-  const ALL = { podcast, video, trading, sales, research, dev, store };
+
+  // ======================= CALL CENTRE =======================
+  const support = {
+    id: 'support', name: 'Call Centre', hue: 24, tagline: 'Headset pods, a live ticket queue and a break room.',
+    mission: 'Handle customer messages for the shop: work out what each one needs, check the order, and draft a warm reply that fixes it.',
+    brief: 'Paste customer messages here and the team drafts the replies.',
+    floor: 'carpet', floorColor: 'hsl(20 18% 10%)',
+    zones: [
+      { id: 'floor', label: 'SUPPORT FLOOR', u: [7.4, 22.6], v: [7.6, 16.4] },
+      { id: 'lead', label: 'TEAM LEAD', u: [0.8, 6], v: [9, 15.5] },
+      { id: 'break', label: 'BREAK ROOM', u: [15.4, 23.2], v: [18.2, 23.2] },
+    ],
+    desks: [
+      { zone: 'floor', u: 9.6, v: 9.4, kind: 'headset' }, { zone: 'floor', u: 13.1, v: 9.4, kind: 'headset' },
+      { zone: 'floor', u: 9.6, v: 13.2, kind: 'headset' }, { zone: 'floor', u: 13.1, v: 13.2, kind: 'headset' },
+    ],
+    spare: [
+      { zone: 'floor', u: 17.1, v: 9.4, kind: 'headset' }, { zone: 'floor', u: 20.6, v: 9.4, kind: 'headset' },
+      { zone: 'floor', u: 17.1, v: 13.2, kind: 'headset' }, { zone: 'floor', u: 20.6, v: 13.2, kind: 'headset' },
+      { zone: 'lead', u: 3.3, v: 12.2, kind: 'stand' },
+    ],
+    crew: [
+      bot('Triage', 'Phones', 'chat', 'Read each customer message in the brief and label it (where is my order, damaged, wrong item, question, review) with how urgent it is.'),
+      bot('Order Checker', 'Phones', 'search', 'Match each message to the orders in the store data and pull out the status and tracking.', { store: true }),
+      bot('Reply Writer', 'Phones', 'mail', 'Write a short, warm reply for each message with a clear fix. Never invent tracking numbers or dates.'),
+      bot('Tone Check', 'Phones', 'check', 'Check every reply for tone, accuracy and Etsy rules. Output the final replies ready to copy.'),
+    ],
+    cards: { left: [0, 1, 2, 7, 8], right: [0, 1, 2, 3, 4] },
+    floorProps(A) { A.rug(15.8, 22.8, 18.6, 22.8, 'hsl(20 25% 15%)', 'hsl(20 35% 24%)'); },
+    props: [
+      { u: 8.6, v: 11.5, d: 21.6, draw(A) { A.box(8.6, 14.2, 11.45, 11.65, 0, 1.0, 'hsl(24 60% 40% / .35)', 'hsl(24 60% 30% / .35)', 'hsl(24 60% 35% / .35)', 'hsl(24 100% 70% / .5)'); } },
+      { u: 16.1, v: 11.5, d: 29.1, draw(A) { A.box(16.1, 21.7, 11.45, 11.65, 0, 1.0, 'hsl(24 60% 40% / .35)', 'hsl(24 60% 30% / .35)', 'hsl(24 60% 35% / .35)', 'hsl(24 100% 70% / .5)'); } },
+      { u: 17.4, v: 22, draw(A) { A.sofa(16.2, 20.8, 21.7, 22.9, '#4a3328'); } },
+      { u: 22.2, v: 19.2, draw(A) { A.box(21.6, 22.8, 18.6, 19.8, 0, 2.2, '#2a2d33', '#1a1c20', '#222429', 'rgba(255,160,90,.4)'); A.screenAt(21.7, 22.7, 19.8, 1.0, 2.0, (x) => { const c = ['#ff5a4f', '#ffc247', '#46ff9a', '#5ac8ff']; for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) { x.fillStyle = c[(r + k) % 4]; x.fillRect(10 + k * 22, 6 + r * 13, 16, 9); } }); } },
+      { u: 19.6, v: 19, draw(A) { A.cyl(19.6, 19.1, 0.3, 0, 1.1, '#cfe8ff', '#9ab'); A.cyl(19.6, 19.1, 0.24, 1.1, 1.6, 'rgba(120,190,255,.6)', 'rgba(120,190,255,.4)'); } },
+      { u: 22.8, v: 1.6, draw(A) { A.plant(22.8, 1.6, 1.2); } },
+      { u: 6.8, v: 22.6, draw(A) { A.plant(6.8, 22.6, 1.1); } },
+    ],
+    walls(A) {
+      A.wallQuad('right', 13.3, 22.8, 1.3, 4.95, '#0a0503', 'hsl(24 100% 60% / .5)', 1.2);
+      A.wallPaint('right', 13.3, 22.8, 1.3, 4.95, (x) => {
+        x.fillStyle = '#ffb07a'; x.font = '700 7px Michroma, sans-serif'; x.fillText('TICKET QUEUE', 6, 10);
+        const busy = A.anyBusy(); x.font = '700 13px Michroma, sans-serif'; x.fillStyle = busy ? '#ffc247' : '#6b4a33'; x.fillText(busy ? 'ON CALLS' : 'ALL CLEAR', 8, 32);
+        for (let i = 0; i < 12; i++) { x.fillStyle = busy && (i + Math.floor(A.t * 3)) % 4 === 0 ? '#ffc247' : '#2a1a10'; x.fillRect(8 + i * 7.2, 44, 5, 6); }
+      });
+      A.wallQuad('left', 8.2, 17.9, 1.6, 4.6, '#120a06', 'hsl(24 100% 60% / .35)', 1);
+      A.wallClip('left', 8.2, 17.9, 1.6, 4.6, () => { A.wallText('★ ★ ★ ★ ★', 'left', 9.4, 3.6, '#ffc247', 16); A.wallText('MAKE THEIR DAY', 'left', 9.4, 2.4, 'hsl(24 100% 75%)', 10); });
+    },
+  };
+
+  // ======================= FINANCE OFFICE =======================
+  const finance = {
+    id: 'finance', name: 'Finance Office', hue: 44, tagline: 'Ledger desks, filing cabinets and a vault door.',
+    mission: 'Keep track of how the business is really doing: profit after every cost, where money is leaking, and how much to put aside for tax. Not an accountant: flag anything that needs one.',
+    brief: 'Give me this month’s profit picture and what to put aside for tax.',
+    floor: 'carpet', floorColor: 'hsl(40 22% 9%)', deskTop: 'hsl(28 35% 20%)', deskL: 'hsl(28 35% 11%)', deskR: 'hsl(28 35% 15%)',
+    zones: [
+      { id: 'books', label: 'THE BOOKS', u: [7.4, 16.4], v: [7.4, 15.4] },
+      { id: 'tax', label: 'TAX DESK', u: [17, 23.2], v: [10, 16] },
+      { id: 'vault', label: 'VAULT', u: [16.8, 23.2], v: [0.8, 7.6] },
+      { id: 'files', label: 'FILES', u: [0.8, 5.6], v: [8.6, 16] },
+    ],
+    desks: [
+      { zone: 'books', u: 9.6, v: 9.6, kind: 'desk' }, { zone: 'books', u: 13.4, v: 9.6, kind: 'trader' },
+      { zone: 'tax', u: 19.4, v: 12.4, kind: 'desk' },
+    ],
+    spare: [
+      { zone: 'books', u: 9.6, v: 13, kind: 'desk' }, { zone: 'books', u: 13.4, v: 13, kind: 'desk' }, { zone: 'tax', u: 21.9, v: 12.4, kind: 'desk' },
+    ],
+    crew: [
+      bot('Bookkeeper', 'Books', 'money', 'From the store data, lay out sales, production costs, Etsy fees, AI spend and profit. Show the working.', { store: true }),
+      bot('Profit Analyst', 'Books', 'chart', 'Find which products make and lose money and where costs can be cut. Be specific.', { store: true }),
+      bot('Tax Pot', 'Tax', 'cal', 'Estimate how much to put aside for UK income tax and National Insurance on this profit, with the assumptions written out. Say clearly that it is an estimate, not tax advice.', { web: true }),
+    ],
+    cards: { left: [], right: [0, 1, 2, 3, 4] },
+    floorProps(A) { A.rug(8, 15.8, 8, 14.8, 'hsl(10 40% 16%)', 'hsl(40 60% 35%)'); A.rug(17, 23, 1, 7.4, 'hsl(40 10% 13%)', 'hsl(44 80% 50% / .5)'); },
+    props: [
+      { u: 16.8, v: 0.6, d: 17.6, draw(A) { A.glassWall(16.8, 0.6, 16.8, 7.8, 2.4); } },
+      { u: 16.8, v: 7.8, d: 26, draw(A) { A.glassWall(16.8, 7.8, 23.6, 7.8, 2.4); } },
+      ...[[18.4, 2.4], [19.6, 2.4], [18.4, 3.6], [21.4, 2.2]].map(([u, v], i) => ({ u, v, draw(A) { for (let k = 0; k < 3; k++) A.box(u - 0.4, u + 0.4, v - 0.2, v + 0.2, k * 0.2, k * 0.2 + 0.2, '#f1c24a', '#b88a1c', '#d4a32e', 'rgba(0,0,0,.2)'); } })),
+      ...[9.4, 11, 12.6, 14.2].map((v) => ({ u: 1.3, v, draw(A) { A.box(0.9, 1.9, v - 0.7, v + 0.7, 0, 1.6, '#4a4f57', '#2e3238', '#3a3f46', null); for (let k = 0; k < 3; k++) { const [x, y] = A.iso(1.9, v, 0.3 + k * 0.5); A.ctx.fillStyle = '#c9ccd1'; A.ctx.fillRect(x - 3, y - 1, 6, 2); } } })),
+      { u: 4, v: 20, draw(A) { A.chair(3.6, 19.6, '#5a3020'); A.chair(5.2, 19.6, '#5a3020'); A.cyl(4.4, 21, 0.5, 0, 0.45, '#3a2418', '#2a1810'); } },
+      { u: 22.8, v: 22.6, draw(A) { A.plant(22.8, 22.6, 1.2); } },
+      { u: 9, v: 22.6, draw(A) { A.plant(9, 22.6, 1); } },
+    ],
+    walls(A) {
+      A.wallQuad('right', 16.9, 23.4, 0.2, 5.0, 'hsl(40 8% 14%)', 'hsl(44 80% 50% / .4)');
+      const ctx = A.ctx, [cx, cy] = A.wallBasis('right', 20.1, 2.6);
+      ctx.save(); ctx.translate(cx, cy); ctx.transform(1, 0.5, 0, 1, 0, 0);
+      ctx.fillStyle = '#6b6e75'; ctx.beginPath(); ctx.arc(0, 0, 44, 0, 7); ctx.fill(); ctx.strokeStyle = '#2c2e33'; ctx.lineWidth = 4; ctx.stroke();
+      ctx.fillStyle = '#8a8d95'; ctx.beginPath(); ctx.arc(0, 0, 34, 0, 7); ctx.fill();
+      const rot = A.t * (A.anyBusy() ? 0.6 : 0.08); ctx.strokeStyle = '#d4a32e'; ctx.lineWidth = 3;
+      for (let i = 0; i < 6; i++) { const a = rot + i * Math.PI / 3; ctx.beginPath(); ctx.moveTo(Math.cos(a) * 8, Math.sin(a) * 8); ctx.lineTo(Math.cos(a) * 26, Math.sin(a) * 26); ctx.stroke(); }
+      ctx.fillStyle = '#d4a32e'; ctx.beginPath(); ctx.arc(0, 0, 8, 0, 7); ctx.fill(); ctx.restore();
+      A.wallQuad('left', 0.6, 23.4, 3.6, 5.6, '#1a120a', 'hsl(44 80% 50% / .3)');
+      A.wallPaint('left', 0.6, 23.4, 3.6, 5.6, (x) => { x.strokeStyle = '#46ff9a'; x.lineWidth = 1.2; x.beginPath(); for (let i = 0; i <= 40; i++) { const yy = 46 - i * 0.7 - Math.sin(i * 0.5 + A.t * 0.5) * 5; i ? x.lineTo(4 + i * 2.3, yy) : x.moveTo(4, yy); } x.stroke(); x.fillStyle = '#f1c24a'; x.font = '700 9px monospace'; x.fillText('P&L  ▲', 6, 14); });
+    },
+  };
+
+  // ======================= MUSIC STUDIO =======================
+  const music = {
+    id: 'music', name: 'Music Studio', hue: 300, tagline: 'Mixing console, vocal booth, plaques on the wall and an A&R desk.',
+    mission: 'Get the music heard: find artists to pitch beats to, plan releases, pitch playlists and write the posts and pitch emails.',
+    brief: 'Plan the release of my next beat pack and find 10 artists and 10 playlists to pitch it to.',
+    floor: 'studio', floorColor: 'hsl(280 18% 10%)', chairColor: '#3a2340',
+    zones: [
+      { id: 'control', label: 'CONTROL ROOM', u: [7.4, 16.4], v: [7, 13.6] },
+      { id: 'booth', label: 'VOCAL BOOTH', u: [17.4, 23.2], v: [1, 8] },
+      { id: 'anr', label: 'A&R', u: [14, 22.8], v: [15.6, 22.8] },
+      { id: 'lounge', label: 'LOUNGE', u: [0.8, 6], v: [11.5, 22.5] },
+    ],
+    desks: [
+      { zone: 'anr', u: 15.8, v: 17.4, kind: 'desk' }, { zone: 'anr', u: 19.2, v: 17.4, kind: 'desk' },
+      { zone: 'control', u: 12, v: 9.4, kind: 'console' }, { zone: 'booth', u: 20.3, v: 4.2, kind: 'stand' },
+      { zone: 'anr', u: 15.8, v: 20.6, kind: 'desk' },
+    ],
+    spare: [
+      { zone: 'anr', u: 19.2, v: 20.6, kind: 'desk' }, { zone: 'lounge', u: 2.1, v: 14, kind: 'sofa' },
+      { zone: 'lounge', u: 2.1, v: 16.3, kind: 'sofa' }, { zone: 'lounge', u: 2.1, v: 18.6, kind: 'sofa' },
+    ],
+    crew: [
+      bot('A&R Scout', 'A&R', 'search', 'Find real up-and-coming artists who would suit the beats in the brief: name, where they post, their sound and why they fit. Link sources.', { web: true }),
+      bot('Playlist Pitcher', 'A&R', 'radar', 'Find playlists and curators that accept submissions in this genre, with links and how to submit.', { web: true }),
+      bot('Release Planner', 'Control', 'cal', 'Plan the release week by week: dates, assets needed, where it goes live and what to post when.'),
+      bot('Content Writer', 'Booth', 'wave', 'Write the posts, captions and short video ideas for the release, in the artist’s voice.'),
+      bot('Pitch Writer', 'A&R', 'mail', 'Write short, personal pitch messages for the best artists and curators. Mention something real about each one.', { email: true }, { approve: true }),
+    ],
+    cards: { left: [0, 1, 2], right: [0, 1, 2, 3, 4, 5] },
+    floorProps(A) { A.rug(1, 5.6, 12.2, 21.8, 'hsl(300 25% 16%)', 'hsl(300 40% 26%)'); A.rug(8, 16, 7.6, 13, 'hsl(280 20% 13%)', null); },
+    props: [
+      { u: 12, v: 11.4, d: 23, draw(A) {
+        A.box(8.8, 15.2, 10.8, 11.9, 0, 0.8, '#1d1a22', '#121016', '#18151c', 'hsl(300 100% 70% / .4)');
+        const busy = A.anyBusy();
+        for (let i = 0; i < 24; i++) { const [x, y] = A.iso(9.1 + i * 0.25, 11.35, 0.82); A.ctx.fillStyle = i % 4 === 0 ? '#ff6bd5' : '#bbb'; A.ctx.fillRect(x - 0.7, y - 2 - (busy ? Math.abs(Math.sin(A.t * 5 + i)) * 3 : 1), 1.4, 2.5); }
+        A.screenAt(10.6, 13.4, 10.85, 0.8, 1.5, A.screenArt('wave', busy));
+      } },
+      ...[[8.6, 9.2], [15.4, 9.2]].map(([u, v]) => ({ u, v, draw(A) { A.cyl(u, v, 0.08, 0, 1.1, '#333', '#222'); A.box(u - 0.35, u + 0.35, v - 0.3, v + 0.3, 1.1, 2.0, '#18161c', '#0e0d11', '#141217', null); const [x, y] = A.iso(u, v + 0.3, 1.55); const p = A.anyBusy() ? 1 + Math.sin(A.t * 14) * 0.15 : 1; A.ctx.fillStyle = '#333'; A.ctx.beginPath(); A.ctx.ellipse(x, y, 5 * p, 6 * p, 0, 0, 7); A.ctx.fill(); A.ctx.fillStyle = '#ff6bd5'; A.ctx.beginPath(); A.ctx.arc(x, y, 1.6, 0, 7); A.ctx.fill(); } })),
+      { u: 17.2, v: 0.6, d: 17.8, draw(A) { A.glassWall(17.2, 0.6, 17.2, 8.4, 2.6); } },
+      { u: 17.2, v: 8.4, d: 27, draw(A) { A.glassWall(17.2, 8.4, 23.6, 8.4, 2.6); } },
+      { u: 20.3, v: 5, draw(A) { A.micArm(20.6, 5.4, 0, 20.3, 4.2, A.anyBusy()); } },
+      { u: 1.7, v: 13, d: 14, draw(A) { A.sofa(1.0, 2.6, 13, 20, '#3d2a45', 'u'); } },
+      { u: 22.8, v: 22.6, draw(A) { A.plant(22.8, 22.6, 1.2); } },
+      { u: 8, v: 22.6, draw(A) { A.plant(8, 22.6, 1); } },
+    ],
+    walls(A) {
+      for (let i = 0; i < 6; i++) { const s0 = 8.6 + i * 2.5; A.wallQuad('left', s0, s0 + 2, 1.8, 4.4, '#0d0a10', 'hsl(44 80% 60% / .5)', 1); const [x, y] = A.wallBasis('left', s0 + 1, 3.2); const ctx = A.ctx; ctx.fillStyle = i % 3 === 2 ? '#d9dde3' : '#e8c24a'; ctx.beginPath(); ctx.ellipse(x, y, 13, 16, -0.45, 0, 7); ctx.fill(); ctx.fillStyle = '#111'; ctx.beginPath(); ctx.ellipse(x, y, 3, 4, -0.45, 0, 7); ctx.fill(); }
+      A.wallText('GOLD · PLATINUM', 'left', 9, 5.0, 'hsl(44 90% 65%)', 9);
+      for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) { const s0 = 17.4 + i * 1.03, z0 = 0.5 + j * 0.78; A.wallQuad('right', s0, s0 + 0.95, z0, z0 + 0.72, (i + j) % 2 ? 'hsl(300 25% 14%)' : 'hsl(300 30% 10%)', 'rgba(0,0,0,.5)', 0.8); }
+      const rec = A.anyBusy() && Math.sin(A.t * 2.6) > -0.6;
+      A.wallQuad('right', 18.2, 22.6, 5.15, 6.0, rec ? 'hsl(330 90% 45%)' : 'hsl(330 40% 15%)', '#ff8bd8', 1.2);
+      A.wallText('RECORDING', 'right', 18.5, 5.58, '#fff', 11);
+    },
+  };
+
+  const ALL = { podcast, video, trading, sales, research, dev, support, finance, music, store };
   for (const r of Object.values(ALL)) { r.capacity = r.desks.length + (r.spare || []).length; r.chief = r.chief || { u: 4, v: 4 }; }
   window.Rooms = {
     get: (id) => ALL[id] || null,

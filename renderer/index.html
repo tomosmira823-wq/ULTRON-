@@ -13,6 +13,7 @@
     <div class="brand">
       <span class="asterisk">✱</span>
       <span class="wordmark">KIVO</span>
+      <button class="pro-badge" id="pro-badge">FREE</button>
       <span class="sub">ULTRON&nbsp;/&nbsp;AUTONOMOUS COMMERCE STATION</span>
     </div>
     <nav class="depts" id="depts" aria-label="Departments">
@@ -192,6 +193,7 @@
         <div class="glass chat" id="chat"></div>
         <div class="chat-in">
           <textarea id="chat-input" rows="2" placeholder="e.g. make 5 Halloween designs for dog mums · why aren't my coffee shirts selling? · pause autopilot"></textarea>
+          <button class="hw-btn" id="chat-mic" title="Talk to ULTRON">🎙</button>
           <button class="hw-btn go" id="chat-send">SEND</button>
         </div>
       </div>
@@ -453,6 +455,7 @@
       </div>
       <label class="chk"><input type="checkbox" id="s-vat"> I'm charged VAT on Etsy fees (UK sellers: +20%)</label>
 
+      <div id="s-extras"></div>
       <h3 class="engr sm">FRESH START</h3>
       <p class="tiny dim">Your API keys, connected accounts and settings are always kept.</p>
       <div class="row wrap">
@@ -470,6 +473,19 @@
 </div>
 
 <div id="toast" hidden></div>
+<div class="overlay" id="lock" hidden>
+  <div class="sheet metal screws narrow lock-sheet">
+    <div class="sheet-head"><h2 class="engr">KIVO ULTRON PRO</h2><button class="wc close" id="lock-close" aria-label="Close">&#x2715;</button></div>
+    <div class="sheet-body">
+      <p class="wz-p" id="lock-why"></p>
+      <ul class="wz-how"><li>Marketing: auto-posting to Instagram, TikTok and Pinterest</li><li>Every room: Podcast, Video, Trading, Sales, Research, Dev, Call Centre, Finance, Music</li><li>Rooms that hand work to each other, email sending, phone approvals</li></ul>
+      <label class="lbl" for="lock-key">HAVE A KEY?</label>
+      <div class="row"><input id="lock-key" type="text" placeholder="KIVO-…" autocomplete="off"><button class="hw-btn go" id="lock-go">ACTIVATE</button></div>
+      <div class="wz-msg" id="lock-msg"></div>
+      <div class="row end"><span class="tiny dim">One payment, all future updates.</span><button class="hw-btn go big" id="lock-buy">BUY PRO</button></div>
+    </div>
+  </div>
+</div>
 <!-- HIRE A BOT -->
 <div class="overlay" id="sp-hire" hidden>
   <div class="sheet metal screws narrow">
@@ -496,6 +512,7 @@
         <label class="chk"><input type="checkbox" id="hire-t-store"> Store data</label>
         <label class="chk"><input type="checkbox" id="hire-t-marketing"> Marketing data</label>
         <label class="chk"><input type="checkbox" id="hire-t-memory"> Past outputs</label>
+        <label class="chk"><input type="checkbox" id="hire-t-email"> Send emails (you approve)</label>
       </div>
       <label class="chk" id="hire-approve-l"><input type="checkbox" id="hire-approve"> I approve its work before the next bot starts</label>
       <label class="chk" id="hire-feed-l"><input type="checkbox" id="hire-feed"> Feed its notes into the next run</label>
@@ -531,6 +548,16 @@
         <button class="hw-btn" id="sb-addbot">+ ADD BOT</button>
       </div>
       <div class="sb-bots" id="sb-bots"></div>
+      <div class="lbl" style="margin-top:16px">WHEN A JOB FINISHES</div>
+      <div class="row wrap sb-after">
+        <div class="field"><label class="lbl" for="sb-next">HAND THE RESULT TO</label><select id="sb-next"></select></div>
+        <div class="field"><label class="lbl" for="sb-next-mode">HOW</label><select id="sb-next-mode"><option value="brief">Leave it as their next brief</option><option value="auto">Start them straight away</option></select></div>
+        <div class="field"><label class="lbl" for="sb-budget">DAILY BUDGET ($, 0 = no limit)</label><input id="sb-budget" type="number" min="0" step="0.5" value="0"></div>
+      </div>
+      <div class="row wrap">
+        <label class="chk"><input type="checkbox" id="sb-hook"> Post a summary to Slack / Discord</label>
+        <button class="hw-btn mini" id="sb-dir-btn">SAVE RESULTS TO A FOLDER…</button><span class="tiny dim" id="sb-dir"></span>
+      </div>
       <div class="wz-msg" id="sb-msg"></div>
       <div class="row end">
         <button class="hw-btn" id="sb-import">IMPORT</button>
@@ -557,5 +584,6 @@
 <script src="social.js"></script>
 <script src="marketing.js"></script>
 <script src="spaces.js"></script>
+<script src="extras.js"></script>
 </body>
 </html>

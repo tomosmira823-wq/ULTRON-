@@ -648,3 +648,17 @@ body[data-dept="space"] .roster-foot { display: none; }
 .cmd-recent .ln .m { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmd-recent .ln b { color: var(--accent); font-weight: 400; }
 .cmd-recent .ln.ok .m { color: #d8e8df; } .cmd-recent .ln.err .m { color: var(--bad); }
+
+/* 2.5 */
+.pro-badge { -webkit-app-region: no-drag; align-self: center; border: 1px solid var(--ink-dim); background: none; color: var(--ink-dim); border-radius: 3px; padding: 3px 6px; font: 400 7px/1 var(--f-display); letter-spacing: .14em; cursor: pointer; }
+.pro-badge.pro { border-color: var(--accent); color: var(--accent); cursor: default; box-shadow: 0 0 8px var(--accent-glow); }
+#chat-mic { flex: none; font-size: 15px; padding: 6px 10px; }
+#chat-mic.rec { color: #fff; background: #c9322a; animation: stopPulse 1.2s ease-in-out infinite; }
+#s-extras .row input[type=text], #s-extras .row input[type=password] { flex: 1; }
+#s-extras .field { min-width: 120px; }
+.sp-outbox { border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: 4px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.ob-row { display: grid; grid-template-columns: 220px minmax(0, 1fr) auto auto; gap: 8px; align-items: start; padding: 5px; background: rgba(0,0,0,.25); border-radius: 3px; }
+.ob-row input { padding: 4px 6px; font-size: 12px; }
+.ob-row summary { cursor: pointer; font-size: 12px; } .ob-row .ob-body { white-space: pre-wrap; font: 12px/1.4 var(--f-body); margin: 6px 0 0; color: #cfd8d3; }
+.ob-row.sent { opacity: .65; } .ob-row .err { grid-column: 1 / -1; color: var(--bad); }
+.sb-after { align-items: flex-end; }

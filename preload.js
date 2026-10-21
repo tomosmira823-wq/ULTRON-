@@ -40,4 +40,12 @@ contextBridge.exposeInMainWorld('kivo', {
   oauthPkce: () => ipcRenderer.invoke('oauth:pkce'),
   openUrl: (u) => ipcRenderer.send('open:url', u),
   openFile: (o) => ipcRenderer.invoke('file:open', o),
+  tgSet: (o) => ipcRenderer.invoke('tg:set', o), tgStatus: () => ipcRenderer.invoke('tg:status'), tgSend: (o) => ipcRenderer.invoke('tg:send', o),
+  onTg: (fn) => { ipcRenderer.on('tg:msg', (_e, v) => fn('msg', v)); ipcRenderer.on('tg:cb', (_e, v) => fn('cb', v)); ipcRenderer.on('tg:paired', (_e, v) => fn('paired', v)); ipcRenderer.on('tg:error', (_e, v) => fn('error', v)); },
+  mailSet: (p) => ipcRenderer.invoke('mail:set', p), mailStatus: () => ipcRenderer.invoke('mail:status'), mailTest: () => ipcRenderer.invoke('mail:test'), mailSend: (o) => ipcRenderer.invoke('mail:send', o),
+  hookPost: (o) => ipcRenderer.invoke('hook:post', o),
+  folderPick: (o) => ipcRenderer.invoke('folder:pick', o), folderWrite: (o) => ipcRenderer.invoke('folder:write', o),
+  backupTo: (o) => ipcRenderer.invoke('backup:to', o), backupSave: () => ipcRenderer.invoke('backup:save'), backupRestore: () => ipcRenderer.invoke('backup:restore'),
+  licGet: () => ipcRenderer.invoke('lic:get'), licSet: (k) => ipcRenderer.invoke('lic:set', k),
+  stt: (o) => ipcRenderer.invoke('stt', o),
 });

@@ -25,7 +25,7 @@
   window.Station = {
     init(cv, lbl, cb) { classic.init(cv, lbl, cb); iso.init($('#storefloor'), cb); },
     setBusy(...a) { classic.setBusy(...a); iso.setBusy(...a); },
-    packet(from, to, c) { classic.packet(from, to, c); iso.packet(from, to); },
+    packet(from, to, c, say) { classic.packet(from, to, c); iso.packet(from, to, null, say); },
     highlight: (id) => classic.highlight(id),
     launchShuttle: () => classic.launchShuttle(),
     focus(id) { classic.focus(id); iso.focus(id); },

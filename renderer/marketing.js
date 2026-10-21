@@ -712,7 +712,7 @@ Reply with JSON only: {"segments": [{"start": 0, "end": 3.5, "text": "..."}], "h
   }
   function autoTick() {
     const m = M(), s = m.settings;
-    if (!s.auto || running || !K.keys.anthropic) return;
+    if (!s.auto || running || !K.keys.anthropic || (window.EX && !EX.pro)) return;
     if (Date.now() - (m.lastAuto || 0) < s.everyDays * DAY) return;
     m.lastAuto = Date.now(); save();
     say('ultron', 'Marketing autopilot: starting this week’s campaign.');

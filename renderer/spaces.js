@@ -10,7 +10,7 @@
 
   const CAP = { store: 6, marketing: 6, custom: 18 };
   const HUES = [['Cyan', 188], ['Teal', 165], ['Green', 140], ['Gold', 44], ['Orange', 24], ['Red', 356], ['Pink', 322], ['Blue', 215], ['Violet', 280]];
-  const TOOL_NAMES = { web: 'Web search', store: 'Store data', marketing: 'Marketing data', memory: 'Past outputs' };
+  const TOOL_NAMES = { web: 'Web search', store: 'Store data', marketing: 'Marketing data', memory: 'Past outputs', email: 'Send emails (you approve)' };
   const ICONS = OfficeKit.ICONS;
   const MODEL_SHORT = { 'claude-opus-5-5': 'Opus', 'claude-sonnet-5-5': 'Sonnet', 'claude-haiku-5-5': 'Haiku' };
   const DEF_MODEL = 'claude-sonnet-5-5';
@@ -140,7 +140,7 @@
   // which room fits a request best (chat)
   function pickRoom(...txt) {
     const x = txt.join(' ').toLowerCase();
-    const m = [['podcast', /podcast|episode|guest|interview|show notes/], ['video', /youtube|video|shorts|tiktok|film|script|thumbnail|content/], ['trading', /trad|stock|market|crypto|invest|finance|money|watchlist/], ['sales', /sales|lead|outreach|client|prospect|email|cold/], ['dev', /dev|code|app|website|software|build|program/], ['research', /research|report|study|analy|compare|fact/]];
+    const m = [['support', /customer service|call cent|support/], ['finance', /finance|tax|bookkeep|accounts/], ['music', /music|beats?|songs?|playlist|artist/], ['podcast', /podcast|episode|guest|interview|show notes/], ['video', /youtube|video|shorts|tiktok|film|script|thumbnail|content/], ['trading', /trad|stock|market|crypto|invest|finance|money|watchlist/], ['sales', /sales|lead|outreach|client|prospect|email|cold/], ['dev', /dev|code|app|website|software|build|program/], ['research', /research|report|study|analy|compare|fact/], ['support', /support|customer|call cent|service|complain|refund/], ['finance', /financ|tax|profit|account|book ?keep|vat/], ['music', /music|beat|song|release|playlist|artist|sinc/]];
     return (m.find(([, re]) => re.test(x)) || ['research'])[0];
   }
   const kindOf = (d) => (d === 'store' || d === 'marketing' ? d : get(d) ? 'custom' : null);
@@ -155,7 +155,7 @@
   const cleanAgent = (a, kind) => ({
     id: a.id || 'sp.' + uid(), name: String(a.name || 'New bot').slice(0, 28), job: String(a.job || '').slice(0, 2000), team: String(a.team || (kind === 'custom' ? 'Team' : 'Hires')).slice(0, 18),
     model: K.MODEL_CHOICES.some((m) => m[0] === a.model) ? a.model : DEF_MODEL, icon: ICONS.includes(a.icon) ? a.icon : 'doc',
-    tools: { web: !!a.tools?.web || a.web === true, store: !!a.tools?.store, marketing: !!a.tools?.marketing, memory: !!a.tools?.memory },
+    tools: { web: !!a.tools?.web || a.web === true, store: !!a.tools?.store, marketing: !!a.tools?.marketing, memory: !!a.tools?.memory, email: !!a.tools?.email },
     approve: kind === 'custom' && !!a.approve, when: kind === 'custom' ? undefined : a.when === 'manual' ? 'manual' : 'after', feed: kind !== 'custom' && a.feed !== false,
     out: a.out || '', outAt: a.outAt || 0,
   });
@@ -234,6 +234,49 @@
       throw e;
     }
   }
+  const roomCostToday = (sp) => sp.agents.reduce((n, a) => n + K.costOf(a.id), 0);
+  const roomSound = (sp) => ({ sales: 'gong', trading: 'bell', podcast: 'chime', video: 'chime' }[sp.room] || 'chime');
+  // a short line a bot says when it hands its work over
+  function chatter(out, toName) {
+    const line = String(out || '').split('\n').map((l) => l.replace(/^[#>*\-\d.\s|]+/, '').replace(/\*\*/g, '').trim()).find((l) => l.length > 8 && !/^[-|: ]+$/.test(l)) || '';
+    const first = toName.split(' ')[0];
+    return line ? (line.length > 34 ? line.slice(0, 33) + '…' : line) : `Over to you, ${first}`;
+  }
+  function parseEmails(text) {
+    const m = String(text).match(/```json\s*([\s\S]*?)```\s*$/) || String(text).match(/```json\s*([\s\S]*?)```/);
+    if (!m) return [];
+    try { const j = JSON.parse(m[1]); return (j.emails || []).filter((e) => e && (e.subject || e.body)).slice(0, 25).map((e) => ({ to: String(e.to || '').trim(), subject: String(e.subject || '').slice(0, 200), body: String(e.body || ''), status: 'ready' })); } catch { return []; }
+  }
+  // what happens when a room finishes: hand on to another room, post to Slack/Discord, save a file, ping the phone
+  async function afterSpaceRun(sp, run) {
+    const text = `✅ ${sp.name}: ${run.title}\n\n${String(run.final).slice(0, 1400)}`;
+    if (sp.hook && K.D.settings.webhook) kivo.hookPost({ url: K.D.settings.webhook, text }).then(() => K.log('ultron', `${sp.name}: posted the result to ${/slack/.test(K.D.settings.webhook) ? 'Slack' : 'Discord'}.`, 'ok')).catch((e) => K.log('ultron', 'Webhook failed: ' + K.cleanErr(e), 'err'));
+    if (sp.saveDir) { const name = `${new Date(run.at).toISOString().slice(0, 10)} ${sp.name} - ${(run.title || 'output').replace(/[^\w &-]/g, '')}.md`; kivo.folderWrite({ dir: sp.saveDir, name, data: runMarkdown(sp, run) }).then((f) => K.log('ultron', `${sp.name}: saved ${f}`, 'ok')).catch((e) => K.log('ultron', 'Save failed: ' + K.cleanErr(e), 'err')); }
+    window.EX?.phoneDone(sp, run);
+    const nx = sp.next || {};
+    if (!nx.to || (run.chain || 0) >= 3) return;
+    const input = `Input from the ${sp.name} (${run.title}):\n${String(run.final).slice(0, 6000)}`;
+    if (nx.to === 'store') {
+      const brief = `Design ideas based on this work from ${sp.name}: ${String(run.final).replace(/\s+/g, ' ').slice(0, 1200)}`;
+      if (nx.mode === 'auto') { K.log('ultron', `${sp.name} → Store: starting a mission from the result.`, 'ok'); K.startMission?.(brief); }
+      else { K.setStoreBrief?.(brief); K.log('ultron', `${sp.name} → Store: the result is waiting as the next mission brief.`, 'ok'); }
+      return;
+    }
+    const tgt = get(nx.to); if (!tgt || tgt.id === sp.id) return;
+    const brief = `${input}\n\nWhat to do with it: ${tgt.brief || tgt.mission}`;
+    if (nx.mode === 'auto' && !isRunning(tgt.id)) {
+      K.log('ultron', `${sp.name} → ${tgt.name}: handing the result over and starting.`, 'ok');
+      const before = tgt.runs.length; runSpace(tgt.id, brief).then(() => {}); const r = tgt.runs[before]; if (r) r.chain = (run.chain || 0) + 1;
+    } else { tgt.pendingInput = { from: sp.name, text: brief, at: Date.now() }; save(); K.log('ultron', `${sp.name} → ${tgt.name}: result waiting as its next brief.`, 'ok'); renderAll(); }
+  }
+  const runMarkdown = (sp, r) => `# ${r.title || r.brief}\n\n_${sp.name} · ${new Date(r.at).toLocaleString()}_\n\n**Brief:** ${r.brief}\n\n${r.final}\n\n---\n\n` + r.steps.filter((x) => x.out).map((x) => `## ${x.name}\n\n${x.out}`).join('\n\n');
+  async function sendEmail(sp, run, i) {
+    const e = run.outbox?.[i]; if (!e || e.status === 'sent') return;
+    try { const r = await kivo.mailSend({ to: e.to, subject: e.subject, text: e.body }); e.status = 'sent'; e.sentAt = Date.now(); e.preview = !!r.preview; K.log('ultron', `${sp.name}: email ${r.preview ? 'previewed (not sent)' : 'sent'} to ${e.to}`, 'ok'); }
+    catch (err) { e.status = 'failed'; e.error = K.cleanErr(err); K.log('ultron', `Email to ${e.to || '(no address)'} failed: ${e.error}`, 'err'); }
+    save(); renderAll();
+  }
+  async function sendAll(sp, run) { for (let i = 0; i < (run.outbox || []).length; i++) if (run.outbox[i].status !== 'sent' && run.outbox[i].to) await sendEmail(sp, run, i); }
   const BASE_RULES = 'Write in clear Markdown with headings and lists where useful. Be concrete and complete, no preamble or sign-off. British English. Never invent facts, names, numbers or links: if something needs checking, say so.';
   async function runSpace(id, brief) {
     const sp = get(id); if (!sp) return;
@@ -241,6 +284,7 @@
     if (isRunning(id)) { K.toast(`${sp.name} is already working.`, true); return; }
     if (!sp.agents.length) { K.toast('Hire at least one bot into this space first.', true); openHire(id); return; }
     brief = String(brief || sp.brief || sp.mission || '').trim();
+    if (sp.pendingInput) delete sp.pendingInput;
     if (!brief) { K.toast('Write a brief first.', true); return; }
     const run = { id: uid(), at: Date.now(), brief, status: 'running', steps: [], cost: 0, title: '' };
     sp.runs.push(run); if (sp.runs.length > 40) sp.runs.splice(0, sp.runs.length - 40);
@@ -270,10 +314,12 @@ Reply with JSON only: {"title": "short title for this job (max 8 words)", "tasks
       let prev = 'ultron';
       for (const a of team) {
         check();
+        if (sp.budget > 0 && roomCostToday(sp) >= sp.budget) throw new Error(`Daily budget of $${sp.budget} reached for ${sp.name}. Raise it in EDIT ROOM or try tomorrow.`);
         const task = String(plan.tasks?.[a.id] || a.job);
         const step = { agent: a.id, name: a.name, task, out: '', status: 'working', at: Date.now(), cost: 0 };
+        const prevStep = run.steps[run.steps.length - 1];
         run.steps.push(step); renderAll();
-        floor?.packet(prev, a.id); prev = a.id;
+        floor?.packet(prev, a.id, null, prevStep ? chatter(prevStep.out, a.name) : ''); prev = a.id;
         let note = '';
         for (let attempt = 0; ; attempt++) {
           K.setAgent(a.id, 'WORKING', attempt ? 'Redoing with your note' : task.slice(0, 60));
@@ -287,15 +333,18 @@ The owner's brief: ${brief}
 Your instruction from ULTRON for this job: ${task}
 ${data ? '\n' + data + '\n' : ''}${ctx ? `\nWork from the team so far (build on it, don't repeat it):\n${ctx}\n` : ''}${note ? `\nThe owner reviewed your last attempt and asked for this change: ${note}\nYour last attempt:\n${step.out.slice(0, 4000)}\n` : ''}
 ${a.tools.web ? 'You can search the web: use it for anything current, and link your sources.' : 'You have no internet access in this job.'}
+${a.tools.email ? 'You can send emails, but only after the owner approves them. End your reply with the emails to send as a fenced json block: ```json\n{"emails": [{"to": "address", "subject": "...", "body": "plain text"}]}\n``` Only use email addresses that appear in the work above or the brief; if you have no address, leave "to" empty. Never invent addresses.' : ''}
 ${BASE_RULES}`;
           const t0 = run.cost;
           step.out = (await askBot(a, prompt, task.slice(0, 60), 6000, addCost)).trim();
           step.cost += run.cost - t0;
           a.out = step.out; a.outAt = Date.now();
+          if (a.tools.email) { const em = parseEmails(step.out); if (em.length) { run.outbox = em; step.out = step.out.replace(/```json[\s\S]*?```\s*$/, '').trim() + `\n\n(${em.length} email${em.length > 1 ? 's' : ''} ready in the outbox below.)`; } }
           K.log(a.id, `Done: ${step.out.split('\n').find((l) => l.trim())?.replace(/^#+\s*/, '').slice(0, 120) || 'finished'}`, 'ok');
           if (!a.approve) break;
           step.status = 'waiting'; run.status = 'waiting'; K.setAgent(a.id, 'IDLE'); save(); renderAll();
           K.notify(`${sp.name}: ${a.name} needs you`, 'Approve or send it back with a note.');
+          window.EX?.askApproval(sp, run, step);
           const ans = await new Promise((res) => waiting.set(run.id + ':' + a.id, res));
           waiting.delete(run.id + ':' + a.id);
           run.status = 'running';
@@ -310,6 +359,8 @@ ${BASE_RULES}`;
       run.final = last?.out || ''; run.status = 'done';
       const sum = `${run.title} · ${team.length} bots · ${K.usd(run.cost)}`;
       K.log('ultron', `${sp.name} finished: ${sum}`, 'ok'); K.toast(`${sp.name} finished · ${run.title}`); K.notify(`${sp.name} finished`, run.title);
+      window.EX?.sound(roomSound(sp));
+      setTimeout(() => afterSpaceRun(sp, run), 0);
     } catch (e) {
       run.status = e.message === 'ABORTED' ? 'stopped' : 'failed'; run.error = e.message === 'ABORTED' ? 'Stopped' : e.message;
       for (const st of run.steps) if (st.status !== 'done') st.status = st.out ? 'done' : 'failed';
@@ -371,6 +422,7 @@ Give short, specific, useful notes the owner and the rest of the crew can act on
     if (!K.keys.anthropic) return;
     for (const sp of S().list) {
       if (!sp.auto?.on || isRunning(sp.id) || !sp.agents.length) continue;
+      if (window.EX && !EX.pro && S().list.indexOf(sp) > 0) continue;
       if (Date.now() - (sp.auto.last || 0) < Math.max(1, sp.auto.hours) * HOUR) continue;
       sp.auto.last = Date.now(); save();
       K.log('ultron', `${sp.name} autopilot: starting a run.`);
@@ -522,6 +574,8 @@ Give short, specific, useful notes the owner and the rest of the crew can act on
     if (!K.keys.anthropic) add('bad', 'Add your Claude key so the bots can work.', 'SETTINGS', () => $('#btn-settings').click());
     if (!sp.agents.length) add('warn', 'No bots yet. Hire your first one, or let ULTRON design the team.', '+ HIRE', () => openHire(sp.id));
     for (const w of waitingSteps.slice(0, 2)) add('warn', `${w.step.name} is waiting for your OK.`, 'REVIEW', () => { tab = 'outputs'; openRun = w.run.id; renderAll(); });
+    if (sp.pendingInput) add('warn', `New input from ${sp.pendingInput.from} is waiting.`, 'USE IT', () => { $('#sp-brief').value = sp.pendingInput.text; sp.brief = sp.pendingInput.text; delete sp.pendingInput; save(); renderAll(); });
+    if (sp.budget > 0) add(roomCostToday(sp) >= sp.budget ? 'bad' : '', `Budget: ${K.usd(roomCostToday(sp))} of $${sp.budget} used today.`);
     if (sp.agents.some((a) => a.tools.web)) add('', 'Some bots search the web (about 1p per search, on your Claude bill).');
     if (!box.childNodes.length) add('good', 'Ready. Write a brief and press Run.');
   }
@@ -551,6 +605,21 @@ Give short, specific, useful notes the owner and the rest of the crew can act on
           const acts = el('div', 'row wrap');
           acts.append(btn('COPY', () => { navigator.clipboard.writeText(r.final); K.toast('Copied'); }, 'mini'), btn('SAVE .MD', () => exportRun(sp, r), 'mini'), btn('RUN AGAIN', () => runSpace(sp.id, r.brief), 'mini'));
           fin.append(acts); inner.append(fin);
+        }
+        if (r.outbox?.length) {
+          const ob = el('div', 'sp-outbox'); ob.append(el('div', 'lbl', `OUTBOX · ${r.outbox.filter((e) => e.status === 'sent').length}/${r.outbox.length} SENT`));
+          r.outbox.forEach((e, i) => {
+            const row = el('div', 'ob-row ' + e.status);
+            const to = el('input'); to.value = e.to; to.placeholder = 'add an email address'; to.onchange = () => { e.to = to.value.trim(); save(); };
+            const b = el('details'); const sm = el('summary'); sm.append(el('b', '', e.subject || '(no subject)')); b.append(sm, el('pre', 'ob-body', e.body));
+            row.append(to, b, el('span', 'pill ' + (e.status === 'sent' ? 'pass' : e.status === 'failed' ? 'fail' : ''), e.status === 'sent' ? (e.preview ? 'PREVIEWED' : 'SENT') : e.status.toUpperCase()));
+            if (e.status !== 'sent') row.append(btn('SEND', () => sendEmail(sp, r, i), 'mini go'));
+            if (e.error) row.append(el('div', 'tiny err', e.error));
+            ob.append(row);
+          });
+          const left = r.outbox.filter((e) => e.status !== 'sent');
+          if (left.length) ob.append(window.EX?.mailOn ? btn(`SEND ALL ${left.filter((e) => e.to).length}`, () => sendAll(sp, r), 'go') : btn('SET UP EMAIL IN SETTINGS', () => window.EX?.openSettings('mail'), ''));
+          inner.append(ob);
         }
         for (const s of r.steps) {
           const d = el('details', 'sp-step ' + s.status); if (s.status === 'waiting') d.open = true;
@@ -779,6 +848,7 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
     const url = f.snapshot(480, 280); previews.set(rm.id, url); return url;
   }
   function openBuilder(id) {
+    if (!id && window.EX && !EX.allow('room')) return;
     const sp = id ? get(id) : null, roomMode = !sp || !!sp.room;
     bctx = { id: sp?.id || null, hue: sp?.hue ?? 188, style: sp?.style || 'office', room: sp?.room || null, template: null, agents: sp ? sp.agents.map((a) => ({ ...a, tools: { ...a.tools } })) : [] };
     $('#sb-title').textContent = sp ? `EDIT ${sp.name.toUpperCase()}` : 'ADD A ROOM';
@@ -800,6 +870,13 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
     }
     const ss = $('#sb-style'); ss.textContent = ''; for (const [v, n] of Object.entries(OfficeKit.STYLES)) { const o = el('option', '', n); o.value = v; ss.append(o); } ss.value = bctx.style; ss.onchange = () => (bctx.style = ss.value);
     renderHues(); renderBuilderBots();
+    // when a job finishes
+    bctx.next = { ...(sp?.next || {}) }; bctx.hook = !!sp?.hook; bctx.saveDir = sp?.saveDir || ''; bctx.budget = sp?.budget || 0;
+    const nx = $('#sb-next'); nx.textContent = '';
+    for (const [v, n] of [['', 'Nobody'], ['store', 'Store (as a design brief)'], ...S().list.filter((x) => x.id !== sp?.id).map((x) => [x.id, x.name])]) { const o = el('option', '', n); o.value = v; nx.append(o); }
+    nx.value = bctx.next.to || ''; $('#sb-next-mode').value = bctx.next.mode || 'brief';
+    $('#sb-budget').value = bctx.budget; $('#sb-hook').checked = bctx.hook; $('#sb-dir').textContent = bctx.saveDir || 'not saving';
+    $('#sb-hook').disabled = !K.D.settings.webhook; $('#sb-hook').parentElement.title = K.D.settings.webhook ? '' : 'Add a Slack or Discord webhook in Settings first';
     $('#sp-builder').hidden = false; setTimeout(() => $('#sb-name').focus(), 50);
   }
   function chooseRoom(rm) {
@@ -857,8 +934,10 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
     const cap = bctx.room ? Rooms.get(bctx.room).capacity : CAP.custom;
     const agents = bctx.agents.filter((a) => a.name.trim() && a.job.trim()).slice(0, cap).map((a) => cleanAgent(a, 'custom'));
     let sp = bctx.id && get(bctx.id);
-    if (sp) Object.assign(sp, { name: name.slice(0, 24), hue: bctx.hue, style: bctx.style, mission: $('#sb-mission').value.trim(), brief: $('#sb-brief').value.trim(), agents });
+    const after = { next: { to: $('#sb-next').value, mode: $('#sb-next-mode').value }, hook: $('#sb-hook').checked, saveDir: bctx.saveDir || '', budget: Math.max(0, +$('#sb-budget').value || 0) };
+    if (sp) Object.assign(sp, after, { name: name.slice(0, 24), hue: bctx.hue, style: bctx.style, mission: $('#sb-mission').value.trim(), brief: $('#sb-brief').value.trim(), agents });
     else { sp = { id: 's_' + uid(), name: name.slice(0, 24), room: bctx.room || undefined, hue: bctx.hue, style: bctx.style, mission: $('#sb-mission').value.trim(), brief: $('#sb-brief').value.trim(), agents, runs: [], auto: { on: false, hours: 24, last: 0 }, createdAt: Date.now(), template: bctx.template }; S().list.push(sp); K.log('ultron', `New space: ${sp.name} with ${agents.length} bots.`, 'ok'); }
+    Object.assign(sp, after);
     for (const a of agents) K.agentState[a.id] = K.agentState[a.id] || { status: K.keys.anthropic ? 'IDLE' : 'OFFLINE' };
     save(); $('#sp-builder').hidden = true;
     K.setDept(sp.id);
@@ -937,6 +1016,7 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
       return 'hire';
     }
     if (a.type === 'newspace') {
+      if (window.EX && !EX.allow('room')) return note('▶ Adding more rooms needs Kivo Ultron Pro.');
       const rid = Rooms.get(String(a.room || a.template || '').toLowerCase())?.id || pickRoom(a.room || '', a.template || '', a.name || '', a.mission || '', a.brief || '');
       const sp = addRoom(rid, a.name, a.mission || a.brief);
       note(`▶ Added the ${sp.name} room with ${sp.agents.length} bots`);
@@ -966,6 +1046,7 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
     $('#hire-close').onclick = closeHire; $('#hire-save').onclick = saveHire; $('#hire-del').onclick = deleteHire; $('#hire-ai').onclick = designOne;
     $('#hire-desc').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); designOne(); } };
     $('#sb-close').onclick = () => ($('#sp-builder').hidden = true);
+    $('#sb-dir-btn').onclick = async () => { const d = await kivo.folderPick({ title: 'Save this room’s results to…' }); if (d) { bctx.saveDir = d; $('#sb-dir').textContent = d; } };
     $('#sb-save').onclick = saveBuilder; $('#sb-del').onclick = deleteSpace; $('#sb-ai').onclick = designTeam; $('#sb-import').onclick = importFile;
     $('#sb-export').onclick = () => { const sp = get(bctx.id); if (sp) exportSpace(sp); };
     $('#sb-addbot').onclick = () => { if (bctx.agents.length >= CAP.custom) return; bctx.agents.push(cleanAgent({ name: 'New bot', team: bctx.agents[bctx.agents.length - 1]?.team || 'Team', job: '' }, 'custom')); renderBuilderBots(); };
@@ -979,7 +1060,7 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
   }
 
   window.SP = {
-    init, renderCmd, get, kindOf, findAgent, nameOf, show, hideCustom, focus, setBusy, renderAll, renderTabs, renderRoster, rosterHires, renderFeed,
+    init, renderCmd, answer, sendAll, roomCostToday, get, kindOf, findAgent, nameOf, show, hideCustom, focus, setBusy, renderAll, renderTabs, renderRoster, rosterHires, renderFeed,
     openHire, openBuilder, exportHires, importFile, runSpace, stopSpace, afterRun, crewNotes, summary, chatAction, syncFloors, md,
     isRunning, get anyRunning() { return runs.size > 0; }, get list() { return S().list; }, TEMPLATES, CAP, addRoom, capOf,
   };
