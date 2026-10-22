@@ -662,3 +662,12 @@ body[data-dept="space"] .roster-foot { display: none; }
 .ob-row summary { cursor: pointer; font-size: 12px; } .ob-row .ob-body { white-space: pre-wrap; font: 12px/1.4 var(--f-body); margin: 6px 0 0; color: #cfd8d3; }
 .ob-row.sent { opacity: .65; } .ob-row .err { grid-column: 1 / -1; color: var(--bad); }
 .sb-after { align-items: flex-end; }
+
+.room-guide { margin: 10px 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: 4px; background: color-mix(in srgb, var(--accent) 5%, rgba(0,0,0,.25)); font-size: 13px; line-height: 1.45; }
+.room-guide p { margin: 2px 0 8px; } .room-guide .g-what { color: #e8eeeb; }
+.room-guide .lbl { margin-top: 6px; }
+.room-guide .dim { color: var(--ink-dim); }
+.room-guide .g-ex { display: flex; flex-direction: column; gap: 5px; margin: 4px 0 8px; }
+.room-guide .g-ex .chip { font-size: 12px; cursor: pointer; }
+details.room-guide summary { cursor: pointer; font: 400 8px/1 var(--f-display); letter-spacing: .14em; color: var(--accent); padding: 2px 0; }
+details.room-guide[open] summary { margin-bottom: 8px; }

@@ -6,6 +6,7 @@
 
   // ======================= PODCAST STUDIO =======================
   const podcast = {
+    guide: {"what": "Preps every episode for you. Give it a guest or a topic and the crew researches them, plans the running order, writes your questions, then turns it into show notes, clip ideas and promo posts.", "examples": ["Prep a 45-minute episode with Sarah Jones, owner of Bloom Florist in Knutsford, about starting a business in a cost-of-living crisis", "Plan a solo episode: 5 ways small businesses can use AI this year", "I recorded an episode about mental health in the trades. Write show notes, timestamps outline and 5 clip ideas"], "get": "A research pack on the guest with links, a timed run sheet, 10-12 questions, title options, show notes, clip ideas with hooks, and posts for Instagram, TikTok and LinkedIn.", "tips": "Name the guest and their business so the researcher can find real info. Hand results to the Video Studio to turn clip ideas into scripts."},
     id: 'podcast', name: 'Podcast Studio', hue: 14, tagline: 'Round table, mics, cameras and a control room.',
     mission: 'Plan, prep and promote podcast episodes: research guests, write the run sheet and questions, then turn each episode into show notes, clips and posts.',
     brief: 'Prep next week’s episode: a 45-minute chat with a local small-business owner about using AI.',
@@ -70,6 +71,7 @@
 
   // ======================= VIDEO STUDIO =======================
   const video = {
+    guide: {"what": "Plans YouTube videos and Shorts from idea to edit notes. Tell it your channel's niche or a topic and it comes back with ideas, full scripts, titles, thumbnail ideas, descriptions and a shot list.", "examples": ["Plan 3 Shorts about weird science facts for my explainer channel", "Write a 6-minute YouTube video: why electricians are using AI now", "Turn this idea into a Short with a strong hook: the secret government project nobody talks about"], "get": "Ideas with why they'll work, scripts with on-screen text, 3 titles and 2 thumbnail concepts each, description and tags, and a shot-by-shot edit list.", "tips": "Say how long, what style (animated, talking head) and who it's for. The Idea Scout searches what's trending right now."},
     id: 'video', name: 'Video Studio', hue: 356, tagline: 'Green screen set, writers’ room and an edit bay.',
     mission: 'Plan and write YouTube videos and Shorts that people actually watch to the end, and package them to get clicked.',
     brief: 'Plan 3 Shorts about weird science facts.',
@@ -121,6 +123,7 @@
 
   // ======================= TRADING FLOOR =======================
   const trading = {
+    guide: {"what": "A research desk for markets. Give it a watchlist and it pulls latest prices and news, writes a balanced view on each, flags the risks and keeps a pretend-money trading journal. It never places real trades and isn't financial advice.", "examples": ["Morning brief on my watchlist: AAPL, NVDA, MSFT and the FTSE 100", "What moved gold and the pound this week and why?", "Paper trade idea: should I buy NVDA after earnings? Log it in the journal with a stop and target"], "get": "Prices and moves with dates and sources, the news behind them, bull and bear cases, risk notes and position limits, and a paper-trade journal table it remembers between runs.", "tips": "Turn on autopilot every 24 hours for a daily morning brief. Treat it as research to check, not advice."},
     id: 'trading', name: 'Trading Floor', hue: 140, tagline: 'Multi-screen desks, a video wall and a risk office. Research and paper trades only.',
     mission: 'Research markets and keep a paper-trading journal to test ideas. This room never places real trades and is not financial advice.',
     brief: 'Give me a morning brief on my watchlist: AAPL, NVDA, MSFT, and the FTSE 100.',
@@ -172,6 +175,7 @@
 
   // ======================= SALES OFFICE =======================
   const sales = {
+    guide: {"what": "Finds you clients for Kivo. Tell it what kind of business and where, and it finds real businesses, checks their websites, writes an offer for each and drafts a personal cold email. You approve every email before it sends.", "examples": ["Find 5 businesses in Cheshire that need a better website and write an outreach email for each", "Find 10 trades businesses near Warrington with no website and pitch them a one-page site", "Find cafés in Manchester with no online booking and pitch them an AI booking assistant"], "get": "A lead list with links and why each is a good fit, 3 honest problems with each website, a tailored offer with a price range, and ready-to-send emails in the outbox.", "tips": "Set up email in Settings and the Checker's emails land in the outbox: tap Send in the app or on your phone. Add a missing address by hand if the finder couldn't get one."},
     id: 'sales', name: 'Sales Office', hue: 188, tagline: 'Call pods with headsets, a pipeline board and a deal gong.',
     mission: 'Find local small businesses that would benefit from a better website, AI automation or custom software, research each one, and write personal outreach that gets replies.',
     brief: 'Find 5 businesses in Cheshire that need a better website and write an outreach email for each.',
@@ -234,6 +238,7 @@
 
   // ======================= RESEARCH LAB =======================
   const research = {
+    guide: {"what": "Answers any question properly. It searches the web, double-checks the key facts against a second source, compares the options and writes it up as a clear report with links.", "examples": ["What are the best mini PCs for a small office backup server?", "Compare Printify vs Printful for UK Etsy sellers in 2026", "What do I need to know about UK tax as a sole trader selling on Etsy?"], "get": "A 3-line answer up top, then sections, a comparison table where useful, each claim marked confirmed or unverified, and a source list with links.", "tips": "Ask one clear question per run. Hand the report to the Sales Office or Dev Studio to act on it."},
     id: 'research', name: 'Research Lab', hue: 215, tagline: 'Lab benches, a library wall and a holo-helix.',
     mission: 'Research any question properly using the web and write it up as a clear, sourced report.',
     brief: 'What are the best mini PCs for a small office backup server in 2026?',
@@ -281,6 +286,7 @@
 
   // ======================= DEV STUDIO =======================
   const dev = {
+    guide: {"what": "Turns an app or website idea into a spec, a build plan and working code with tests. Good for Kivo client sites, small tools and prototypes.", "examples": ["A one-page booking site for a barber shop", "A simple timesheet app where staff clock in and the boss exports a weekly CSV", "A landing page for my beat packs with a buy button"], "get": "A spec with user stories, the stack and file structure, full code file by file, tests and a manual checklist, and a review listing fixes in priority order.", "tips": "Say who it's for and what 'done' looks like. Save results to a folder in EDIT ROOM so the code lands straight on your PC."},
     id: 'dev', name: 'Dev Studio', hue: 200, tagline: 'Dual-screen desks, server racks and a kanban wall.',
     mission: 'Turn an app or website idea into a clear spec, a build plan and working code with tests.',
     brief: 'A one-page booking site for a barber shop.',
@@ -392,6 +398,7 @@
 
   // ======================= CALL CENTRE =======================
   const support = {
+    guide: {"what": "Handles customer messages for your shop. Paste in customer messages and it sorts them by urgency, checks their order in your store data and drafts a warm reply that fixes the problem.", "examples": ["Paste: 'Hi, my order hasn't arrived and it's been 2 weeks - Jane Smith'", "Paste a batch of 5 Etsy messages and draft replies for all of them", "A customer says the print is faded after one wash. Draft a reply offering a reprint"], "get": "Each message labelled with urgency, the matching order and tracking, a reply in your shop's voice, and a final tone check ready to copy into Etsy.", "tips": "Paste the full message including the customer's name so it can find their order. It never invents tracking numbers."},
     id: 'support', name: 'Call Centre', hue: 24, tagline: 'Headset pods, a live ticket queue and a break room.',
     mission: 'Handle customer messages for the shop: work out what each one needs, check the order, and draft a warm reply that fixes it.',
     brief: 'Paste customer messages here and the team drafts the replies.',
@@ -441,6 +448,7 @@
 
   // ======================= FINANCE OFFICE =======================
   const finance = {
+    guide: {"what": "Shows how the business is really doing. It reads your store data and works out profit after every cost, where money is leaking and roughly what to put aside for tax. It's not an accountant, so use it to check, not to file.", "examples": ["Give me this month's profit picture and what to put aside for tax", "Which of my designs actually make money after fees and AI costs?", "How much have I spent on Claude this month and is it paying for itself?"], "get": "Sales, costs, Etsy fees, AI spend and profit with the working shown, your best and worst products, places to cut costs, and a tax-pot estimate with its assumptions written out.", "tips": "Sync your orders in the Store first so the numbers are fresh. Run it monthly on autopilot (every 720 hours)."},
     id: 'finance', name: 'Finance Office', hue: 44, tagline: 'Ledger desks, filing cabinets and a vault door.',
     mission: 'Keep track of how the business is really doing: profit after every cost, where money is leaking, and how much to put aside for tax. Not an accountant: flag anything that needs one.',
     brief: 'Give me this month’s profit picture and what to put aside for tax.',
@@ -490,6 +498,7 @@
 
   // ======================= MUSIC STUDIO =======================
   const music = {
+    guide: {"what": "Gets your music heard. Tell it about your beats or release and it finds real artists who suit your sound, playlists that take submissions, plans the release and writes your posts and pitches.", "examples": ["Plan the release of my next beat pack and find 10 artists and 10 playlists to pitch it to", "Find UK drill artists with under 10k followers who'd suit dark melodic beats", "Write a release plan and a week of posts for my new single dropping on the 1st"], "get": "Artist and playlist lists with links and how to submit, a week-by-week release plan, posts and short-video ideas, and personal pitch messages ready to send.", "tips": "Describe your sound (genre, BPM, vibe) and link your profile in the brief. Pitch emails go to the outbox for you to approve."},
     id: 'music', name: 'Music Studio', hue: 300, tagline: 'Mixing console, vocal booth, plaques on the wall and an A&R desk.',
     mission: 'Get the music heard: find artists to pitch beats to, plan releases, pitch playlists and write the posts and pitch emails.',
     brief: 'Plan the release of my next beat pack and find 10 artists and 10 playlists to pitch it to.',

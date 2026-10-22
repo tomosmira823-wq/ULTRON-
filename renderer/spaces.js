@@ -557,6 +557,13 @@ Give short, specific, useful notes the owner and the rest of the crew can act on
     $('#sp-ro-cost').textContent = K.usd(sp.agents.reduce((n, a) => n + K.costOf(a.id), 0));
     $('#sp-name').textContent = sp.name.toUpperCase();
     $('#sp-mission').textContent = sp.mission || 'No purpose written yet. Click EDIT SPACE to add one.';
+    const gd = $('#sp-guide'), rm = roomOf(sp);
+    if (gd.dataset.room !== sp.id) {
+      gd.dataset.room = sp.id; gd.open = !sp.runs.length;
+      const sm = el('summary', '', 'HOW TO USE THIS ROOM'); const body = el('div');
+      guideInto(body, rm, (e) => { $('#sp-brief').value = e; sp.brief = e; save(); $('#sp-brief').focus(); });
+      gd.textContent = ''; gd.append(sm, body); gd.hidden = !rm?.guide;
+    }
     const b = $('#sp-run');
     b.classList.toggle('stop', !!r); b.textContent = r ? '■ STOP' : '▶ RUN';
     const workingA = sp.agents.find((a) => K.agentState[a.id]?.status === 'WORKING');
@@ -858,6 +865,7 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
     $('#sb-team-l').textContent = roomMode ? 'THE CREW · RUNS TOP TO BOTTOM · HIRE MORE FROM THE ROOM' : 'THE TEAM · RUNS TOP TO BOTTOM';
     $('#sb-save').textContent = sp ? 'SAVE' : 'ADD ROOM';
     const g = $('#sb-tpls'); g.textContent = ''; g.className = 'room-grid';
+    $('#sb-guide').hidden = true;
     if (!sp) {
       for (const rm of Rooms.list()) {
         const b = el('button', 'room-card'); b.dataset.room = rm.id; b.style.setProperty('--sp', `hsl(${rm.hue} 100% 70%)`);
@@ -879,7 +887,15 @@ Reply with JSON only: {"bots": [{"name": "...", "team": "...", "job": "...", "ic
     $('#sb-hook').disabled = !K.D.settings.webhook; $('#sb-hook').parentElement.title = K.D.settings.webhook ? '' : 'Add a Slack or Discord webhook in Settings first';
     $('#sp-builder').hidden = false; setTimeout(() => $('#sb-name').focus(), 50);
   }
+  // "how to use this room": what it does, example briefs to click, what you get, tips
+  function guideInto(box, rm, onPick) {
+    box.textContent = ''; const g = rm?.guide; box.hidden = !g; if (!g) return;
+    box.append(el('p', 'g-what', g.what), el('div', 'lbl', 'TRY A BRIEF'));
+    const ex = el('div', 'g-ex'); for (const e of g.examples) { const b = el('button', 'chip', e); b.onclick = (ev) => { ev.preventDefault(); onPick(e); }; ex.append(b); } box.append(ex);
+    box.append(el('div', 'lbl', 'YOU GET'), el('p', '', g.get), el('div', 'lbl', 'TIPS'), el('p', 'dim', g.tips));
+  }
   function chooseRoom(rm) {
+    guideInto($('#sb-guide'), rm, (e) => { $('#sb-brief').value = e; });
     bctx.room = rm.id; bctx.hue = rm.hue; bctx.template = rm.id;
     $('#sb-name').value = rm.name; $('#sb-mission').value = rm.mission; $('#sb-brief').value = rm.brief;
     bctx.agents = Rooms.crew(rm.id).map((a) => cleanAgent(a, 'custom'));
