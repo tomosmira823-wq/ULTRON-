@@ -2,6 +2,10 @@
 
 A suite of AI departments ("spaces"). **STORE** designs and sells Etsy print-on-demand shirts; **MARKETING** promotes them on Instagram, TikTok and Pinterest; and you can **build your own spaces** with their own teams of bots. ULTRON runs them all.
 
+## 2.6 · Cloud Workspace (beta)
+
+Press **☁ CLOUD** in the top bar. A bot gets its own Linux computer in Anthropic's cloud (Claude Managed Agents) with Blender, ffmpeg, Python and a headless browser, runs the programs itself, and sends finished files (videos, images) back into Kivo. Nothing runs on your PC. Each job has a hard spend cap ($1–$10) and is billed to your Claude API account. You can attach files (e.g. a .blend or .glb character). Beta: Managed Agents must be available on your Claude account.
+
 ## New in 2.5
 - **Rooms hand work to each other:** in EDIT ROOM, pick who gets the result (another room, or the Store as a design brief) and whether they start straight away.
 - **Bots that do things:** bots with the *Send emails* tool put their emails in an outbox; nothing goes until you press Send (in the app or on your phone). Rooms can post a summary to Slack/Discord and save each result to a folder (e.g. Google Drive or OneDrive).

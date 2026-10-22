@@ -20,6 +20,7 @@
       <button class="dept on" data-dept="store">STORE</button>
       <button class="dept" data-dept="marketing">MARKETING</button>
       <button class="dept add" id="dept-add" title="Add a ready-made room with its own crew">+ ROOM</button>
+      <button class="dept add cloud" id="dept-cloud" title="Cloud Workspace (beta): a bot gets its own computer in the cloud and makes real files">☁ CLOUD</button>
     </nav>
     <div class="readouts" id="readouts">
       <div class="ro"><label>SALES</label><b id="ro-sales">—</b></div>
@@ -488,6 +489,32 @@
   </div>
 </div>
 <!-- HIRE A BOT -->
+<div class="overlay" id="cloud-ov" hidden>
+  <div class="sheet metal screws cloud-sheet">
+    <div class="sheet-head"><h2 class="engr">☁ CLOUD WORKSPACE <span class="beta-tag">BETA</span></h2><button class="wc close" id="cloud-close" aria-label="Close">&#x2715;</button></div>
+    <div class="sheet-body cloud-body">
+      <div class="cloud-left">
+        <p class="cloud-intro">This bot gets its own Linux computer in Anthropic’s cloud with Blender, ffmpeg, Python and a browser. It runs the programs itself and sends the finished files back here. Nothing runs on your PC. Billed to your Claude API account; the budget below is a hard stop.</p>
+        <label class="lbl" for="cloud-task">THE JOB</label>
+        <textarea id="cloud-task" rows="8"></textarea>
+        <div class="chips" id="cloud-presets"></div>
+        <div class="lbl">FILES TO GIVE IT (OPTIONAL, E.G. YOUR .BLEND OR .GLB CHARACTER)</div>
+        <div class="row wrap"><button class="hw-btn" id="cloud-attach">+ ADD FILES</button><div class="cloud-files" id="cloud-files"></div></div>
+        <div class="row">
+          <div class="field"><label class="lbl" for="cloud-model">CLAUDE MODEL</label><select id="cloud-model"><option value="">Sonnet 5.5 (default)</option><option value="claude-opus-5-5">Opus 5.5 (smarter, pricier)</option><option value="claude-haiku-5-5">Haiku 5.5 (cheapest)</option></select></div>
+          <div class="field"><label class="lbl" for="cloud-budget">MAX SPEND FOR THIS JOB</label><select id="cloud-budget"><option value="100">$1</option><option value="200" selected>$2</option><option value="500">$5</option><option value="1000">$10</option></select></div>
+        </div>
+        <div class="row"><button class="hw-btn go" id="cloud-run">▶ RUN IN THE CLOUD</button><button class="hw-btn" id="cloud-stop" hidden>■ STOP</button><span class="cloud-state" id="cloud-state"></span></div>
+      </div>
+      <div class="cloud-right">
+        <div class="lbl">LIVE · WHAT THE BOT IS DOING ON ITS COMPUTER</div>
+        <div class="cloud-log" id="cloud-log"><div class="cl-empty">Press Run and you’ll see every command it types, here, live.</div></div>
+        <div class="lbl">FINISHED FILES</div>
+        <div class="cloud-out" id="cloud-out"><div class="cl-empty">Nothing yet.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="overlay" id="sp-hire" hidden>
   <div class="sheet metal screws narrow">
     <div class="sheet-head"><h2 class="engr" id="hire-title">HIRE A BOT</h2><button class="wc close" id="hire-close" aria-label="Close">&#x2715;</button></div>
@@ -587,5 +614,6 @@
 <script src="marketing.js"></script>
 <script src="spaces.js"></script>
 <script src="extras.js"></script>
+<script src="cloud.js"></script>
 </body>
 </html>

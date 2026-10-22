@@ -134,6 +134,7 @@ ipcMain.handle('data:load', () => readJSON(DATA(), {}));
 ipcMain.handle('data:save', (_e, d) => { writeJSON(DATA(), d); return true; });
 ipcMain.handle('keys:status', () => { const k = readKeys(); return { anthropic: !!k.anthropic, printify: !!k.printify, openai: !!k.openai }; });
 const extras = require('./main-extra')({ app, ipcMain, dialog, getWin: () => win, readKeys, writeKeys, DATA });
+require('./main-cloud')({ app, ipcMain, dialog, getWin: () => win, readKeys, writeKeys, mediaDir: () => { const d = path.join(app.getPath('userData'), 'media'); fs.mkdirSync(d, { recursive: true }); return d; } });
 ipcMain.handle('keys:set', (_e, patch) => { const k = readKeys(); for (const [a, b] of Object.entries(patch)) { if (b === null) delete k[a]; else if (b) k[a] = b.trim(); } writeKeys(k); return true; });
 
 // ---------- network with retry ----------

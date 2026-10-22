@@ -48,4 +48,7 @@ contextBridge.exposeInMainWorld('kivo', {
   backupTo: (o) => ipcRenderer.invoke('backup:to', o), backupSave: () => ipcRenderer.invoke('backup:save'), backupRestore: () => ipcRenderer.invoke('backup:restore'),
   licGet: () => ipcRenderer.invoke('lic:get'), licSet: (k) => ipcRenderer.invoke('lic:set', k),
   stt: (o) => ipcRenderer.invoke('stt', o),
+  cloudPick: () => ipcRenderer.invoke('cloud:pick'), cloudStatus: () => ipcRenderer.invoke('cloud:status'), cloudReset: () => ipcRenderer.invoke('cloud:reset'),
+  cloudRun: (o) => ipcRenderer.invoke('cloud:run', o), cloudStop: (id) => ipcRenderer.invoke('cloud:stop', id), cloudReveal: (p) => ipcRenderer.invoke('cloud:reveal', p),
+  onCloud: (fn) => ipcRenderer.on('cloud:ev', (_e, v) => fn(v)),
 });
